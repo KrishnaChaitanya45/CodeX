@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ResizableSidebar from "@/components/ResizableSidebar";
 import FileExplorer from "@/components/FileExplorer";
 import CodeEditor from "@/components/CodeEditor";
@@ -16,9 +16,9 @@ const defaultContents: Record<string, string> = {
 };
 
 type Params = {
-  params: {
+  params: Promise<{
     projectID: string;
-  };
+  }>;
 };
 
 const getLanguage = (filename: string) => {
@@ -38,10 +38,15 @@ const getLanguage = (filename: string) => {
 };
 
 export default function ProjectPage({ params }: Params) {
+  const [projectID, setProjectID] = useState<string>("");
   const [files, setFiles] = useState<string[]>(defaultFiles);
   const [contents, setContents] = useState<Record<string, string>>(defaultContents);
   const [activeFile, setActiveFile] = useState<string>(defaultFiles[0]);
   const [srcDoc, setSrcDoc] = useState<string>("");
+
+  useEffect(() => {
+    params.then(({ projectID }) => setProjectID(projectID));
+  }, [params]);
 
   const handleSelect = (file: string) => setActiveFile(file);
 
@@ -66,7 +71,7 @@ export default function ProjectPage({ params }: Params) {
 
   const handleSubmit = () => {
     // TODO: implement submission logic, e.g., send contents to server
-    console.log("Submit project", params.projectID, contents);
+    console.log("Submit project", projectID, contents);
   };
 
   return (
