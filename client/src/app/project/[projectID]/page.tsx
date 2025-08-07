@@ -551,7 +551,6 @@ export default function ProjectPage({ params }: Params) {
         setShowConsole(true);
       } else if (event.data.type === 'iframe-ready') {
         setIsIframeReady(true);
-        setConsoleLogs(prev => [...prev, '✅ Preview iframe is ready']);
       } else if (event.data.type === 'custom-alert') {
         // Handle custom alert from iframe
         setConsoleLogs(prev => [...prev, `🚨 Alert: ${event.data.message}`]);

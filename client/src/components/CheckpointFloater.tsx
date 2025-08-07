@@ -3,9 +3,9 @@ import { Checkpoint, CheckpointProgress } from '@/types/project';
 
 interface CheckpointFloaterProps {
   checkpoints: Checkpoint[];
-  currentCheckpoint: number;
+  currentCheckpoint: string;
   progress: CheckpointProgress[];
-  onCheckpointChange: (checkpointId: number) => void;
+  onCheckpointChange: (checkpointId: string) => void;
   onToggleRequirements: () => void;
 }
 
@@ -71,7 +71,7 @@ const CheckpointFloater: FC<CheckpointFloaterProps> = ({
     return `${passedTests}/${totalTests} tests`;
   };
 
-  const getCheckpointStatus = (checkpointId: number) => {
+  const getCheckpointStatus = (checkpointId: string) => {
     const prog = progress.find(p => p.checkpointId === checkpointId);
     const checkpointData = checkpoints.find(c => c.id === checkpointId);
     
@@ -198,8 +198,8 @@ const CheckpointFloater: FC<CheckpointFloaterProps> = ({
         <div className="px-3 pb-3">
           <div className="flex justify-between items-center">
             <button
-              onClick={() => onCheckpointChange(Math.max(1, currentCheckpoint - 1))}
-              disabled={currentCheckpoint === 1}
+              onClick={() => onCheckpointChange(String(Math.max(1, Number(currentCheckpoint) - 1)))}
+              disabled={currentCheckpoint === "1"}
               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ⬅️
@@ -208,8 +208,8 @@ const CheckpointFloater: FC<CheckpointFloaterProps> = ({
               {currentCheckpoint} of {checkpoints.length}
             </span>
             <button
-              onClick={() => onCheckpointChange(Math.min(checkpoints.length, currentCheckpoint + 1))}
-              disabled={currentCheckpoint === checkpoints.length}
+              onClick={() => onCheckpointChange(String(Math.min(checkpoints.length, Number(currentCheckpoint) + 1)))}
+              disabled={currentCheckpoint === String(checkpoints.length)}
               className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ➡️
