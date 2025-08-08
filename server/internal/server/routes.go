@@ -2,8 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+
+	"lms_v0/internal/database"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -19,6 +22,14 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	r.HandlerFunc(http.MethodGet, "/v0/quests", s.GetAllQuests)
 	r.HandlerFunc(http.MethodGet, "/v0/quests/:questSlug", s.GetQuestsHandler)
+
+	// Project management endpoints
+	r.HandlerFunc(http.MethodGet, "/v0/project/options", s.GetProjectOptions)
+	r.HandlerFunc(http.MethodPost, "/v0/project/add", s.AddProjectHandler)
+	r.HandlerFunc(http.MethodPost, "/v0/quests/add", s.AddProjectHandler) // Use same handler
+	// Also support non-v0 prefix
+	r.HandlerFunc(http.MethodGet, "/project/options", s.GetProjectOptions)
+	r.HandlerFunc(http.MethodPost, "/project/add", s.AddProjectHandler)
 
 	return corsWrapper
 }
@@ -91,4 +102,54 @@ func (s *Server) GetAllQuests(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("error handling JSON marshal. Err: %v", err)
 	}
 	_, _ = w.Write(jsonResp)
+}
+
+// GetProjectOptions returns available dropdown options for creating a project
+func (s *Server) GetProjectOptions(w http.ResponseWriter, r *http.Request) {
+	technologies := s.db.GetAllTechnologies()
+	concepts := s.db.GetAllConcepts()
+	categories := s.db.GetAllCategories()
+	difficulties := s.db.GetAllDifficulties()
+
+	options := map[string][]string{
+		"technologies": technologies,
+		"concepts":     concepts,
+		"categories":   categories,
+		"difficulties": difficulties,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(options)
+}
+
+// AddProjectHandler accepts new project data and saves it to the database
+func (s *Server) AddProjectHandler(w http.ResponseWriter, r *http.Request) {
+	var payload database.AddQuestRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if payload.Title == "" || payload.Description == "" ||
+		payload.Category == "" || payload.Difficulty == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Add quest to database
+	slug, err := s.db.AddQuest(payload)
+	if err != nil {
+		log.Printf("Error adding quest: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to add quest: %v", err), http.StatusInternalServerError)
+		return
+	}
+	response := map[string]any{
+		"message": "Quest added successfully",
+		"slug":    slug,
+		"success": true,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	log.Printf("Quest added successfully with slug: %s and %v", slug, response)
+	_ = json.NewEncoder(w).Encode(response)
 }

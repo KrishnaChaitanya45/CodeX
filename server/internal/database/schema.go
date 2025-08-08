@@ -8,6 +8,26 @@ import (
 	"github.com/lib/pq"
 )
 
+// Request types for API operations
+type AddQuestRequest struct {
+	Title          string              `json:"title"`
+	Description    string              `json:"description"`
+	Technology     []string            `json:"technology"`
+	Concept        []string            `json:"concept"`
+	Category       string              `json:"category"`
+	Difficulty     string              `json:"difficulty"`
+	Requirements   []string            `json:"requirements"`
+	BoilerplateUrl string              `json:"boilerplateUrl"`
+	Checkpoints    []CheckpointRequest `json:"checkpoints"`
+}
+
+type CheckpointRequest struct {
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	TestFileUrl  string   `json:"testFileUrl"`
+	Requirements []string `json:"requirements"`
+}
+
 // Quest represents a quest entity.
 type Quest struct {
 	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`

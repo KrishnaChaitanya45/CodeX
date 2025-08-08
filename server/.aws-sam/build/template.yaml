@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CodeX LMS Quest API Lambda Functions
+Parameters:
+  ProductionDbDsn:
+    Type: String
+    Description: Superbase/PostgreSQL connection string
+    NoEcho: true
+  S3BucketName:
+    Type: String
+    Description: S3 bucket name for storing quest assets
+    Default: devsarena
+  Environment:
+    Type: String
+    Description: Environment (dev, staging, prod)
+    Default: dev
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: provided.al2023
+    Handler: bootstrap
+    Environment:
+      Variables:
+        PRODUCTION_DB_DSN:
+          Ref: ProductionDbDsn
+        AWS_S3_BUCKET_NAME:
+          Ref: S3BucketName
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: S3Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+              Fn::Sub: arn:aws:s3:::${S3BucketName}/*
+  GetAllQuestsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: codex-get-all-quests-${Environment}
+      CodeUri: ..\..\builds\get-all-quests.zip
+      Handler: bootstrap
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /quests
+            Method: get
+            RestApiId:
+              Ref: QuestApi
+  GetQuestBySlugFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: codex-get-quest-by-slug-${Environment}
+      CodeUri: ..\..\builds\get-quest-by-slug.zip
+      Handler: bootstrap
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /quests/{slug}
+            Method: get
+            RestApiId:
+              Ref: QuestApi
+  GetProjectOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: codex-get-project-options-${Environment}
+      CodeUri: ..\..\builds\get-project-options.zip
+      Handler: bootstrap
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /data/options
+            Method: get
+            RestApiId:
+              Ref: QuestApi
+  AddQuestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: codex-add-quest-${Environment}
+      CodeUri: ..\..\builds\add-quest.zip
+      Handler: bootstrap
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /quests/add
+            Method: post
+            RestApiId:
+              Ref: QuestApi
+  QuestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub: codex-quest-api-${Environment}
+      StageName:
+        Ref: Environment
+      Cors:
+        AllowMethods: '''GET, POST, PUT, DELETE, OPTIONS'''
+        AllowHeaders: '''Content-Type, Authorization'''
+        AllowOrigin: '''*'''
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: '''*'''
+              Access-Control-Allow-Headers: '''Content-Type, Authorization'''
+              Access-Control-Allow-Methods: '''GET, POST, PUT, DELETE, OPTIONS'''
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: '''*'''
+              Access-Control-Allow-Headers: '''Content-Type, Authorization'''
+              Access-Control-Allow-Methods: '''GET, POST, PUT, DELETE, OPTIONS'''
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${QuestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ApiUrl
+  GetAllQuestsFunctionArn:
+    Description: Get All Quests Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - GetAllQuestsFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-GetAllQuestsFunctionArn
+  GetQuestBySlugFunctionArn:
+    Description: Get Quest by Slug Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - GetQuestBySlugFunction
+      - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-GetQuestBySlugFunctionArn

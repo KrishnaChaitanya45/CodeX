@@ -22,6 +22,15 @@ type Service interface {
 	GetQuestBySlug(slug string) (*Quest, error)
 	GetAllCheckpointsForQuest(questID string) ([]Checkpoint, error)
 	GetCheckpointByID(id string) (*Checkpoint, error)
+
+	// Lookup options for Add Project form
+	GetAllTechnologies() []string
+	GetAllConcepts() []string
+	GetAllCategories() []string
+	GetAllDifficulties() []string
+
+	// Quest management
+	AddQuest(req AddQuestRequest) (string, error)
 }
 
 // service implements the Service interface using GORM
@@ -53,10 +62,6 @@ func New() Service {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
 	err = Seed()
-	if err != nil {
-		log.Fatalf("failed to seed database: %v", err)
-	}
-
 	return dbInstance
 }
 

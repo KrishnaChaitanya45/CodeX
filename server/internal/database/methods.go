@@ -1,10 +1,15 @@
 package database
 
 import (
+	"fmt"
 	"lms_v0/utils"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 // Get all quests
@@ -99,4 +104,226 @@ func (s *service) GetCheckpointByID(id string) (*Checkpoint, error) {
 		return nil, err
 	}
 	return &checkpoint, nil
+}
+
+func (s *service) GetAllTechnologies() []string {
+	var technologies []string
+	s.db.Model(&Technology{}).Pluck("name", &technologies)
+	return technologies
+}
+func (s *service) GetAllConcepts() []string {
+	var concepts []string
+	s.db.Model(&Topic{}).Pluck("name", &concepts)
+	return concepts
+}
+func (s *service) GetAllCategories() []string {
+	var categories []string
+	s.db.Model(&Category{}).Pluck("category", &categories)
+	return categories
+}
+func (s *service) GetAllDifficulties() []string {
+	var difficulties []string
+	s.db.Model(&Difficulty{}).Pluck("level", &difficulties)
+	return difficulties
+}
+
+// AddQuest creates a new quest with its related entities
+func (s *service) AddQuest(req AddQuestRequest) (string, error) {
+	// Start transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	technologies := make([]*Technology, 0, len(req.Technology))
+	for _, tech := range req.Technology {
+		if tech == "" {
+			return "", fmt.Errorf("technology cannot be empty")
+		}
+		if len(tech) > 50 {
+			return "", fmt.Errorf("technology name too long: %s", tech)
+		}
+		technology, err := s.findTechnology(tx, tech)
+
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				// Create new technology if it doesn't exist
+				technology = &Technology{
+					ID:   uuid.New(),
+					Name: tech,
+				}
+				if err := tx.Create(technology).Error; err != nil {
+					tx.Rollback()
+					return "", fmt.Errorf("failed to create technology: %v", err)
+				}
+				technologies = append(technologies, technology)
+			} else {
+				tx.Rollback()
+				return "", fmt.Errorf("failed to find technology: %v", err)
+			}
+		}
+		technologies = append(technologies, technology)
+	}
+
+	// Find topic (concept)
+	concepts := make([]*Topic, 0, len(req.Concept))
+	for _, concept := range req.Concept {
+		if concept == "" {
+			return "", fmt.Errorf("concept cannot be empty")
+		}
+
+		topic, err := s.findTopic(tx, concept)
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				// Create new topic if it doesn't exist
+				topic = &Topic{
+					ID:   uuid.New(),
+					Name: concept,
+				}
+				if err := tx.Create(topic).Error; err != nil {
+					tx.Rollback()
+					return "", fmt.Errorf("failed to create topic: %v", err)
+				}
+				concepts = append(concepts, topic)
+			} else {
+				tx.Rollback()
+				return "", fmt.Errorf("failed to find topic: %v", err)
+			}
+		}
+		concepts = append(concepts, topic)
+	}
+
+	// Find category
+	category, err := s.findCategory(tx, req.Category)
+	if err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to find category: %v", err)
+	}
+
+	// Find difficulty
+	difficulty, err := s.findDifficulty(tx, req.Difficulty)
+	if err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to find difficulty: %v", err)
+	}
+	slug := s.generateSlug(req.Title)
+	// Create quest
+	questID := uuid.New()
+	quest := Quest{
+		ID:              questID,
+		Name:            req.Title,
+		Slug:            slug,
+		Description:     req.Description,
+		BoilerPlateCode: req.BoilerplateUrl,
+		Requirements:    pq.StringArray(req.Requirements),
+		Image:           "", // Empty for now, can be added later
+		CategoryID:      category.ID,
+		DifficultyID:    difficulty.ID,
+		FinalTestCode:   "", // Empty for now, can be added later
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	// Create quest in database
+	if err := tx.Create(&quest).Error; err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to create quest: %v", err)
+	}
+
+	// Associate technology with quest
+	if err := tx.Model(&quest).Association("TechStack").Append(technologies); err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to associate technology: %v", err)
+	}
+
+	// Associate topic with quest
+	if err := tx.Model(&quest).Association("Topics").Append(concepts); err != nil {
+		tx.Rollback()
+		return "", fmt.Errorf("failed to associate topic: %v", err)
+	}
+
+	// Create checkpoints
+	for _, cp := range req.Checkpoints {
+		checkpoint := Checkpoint{
+			ID:              uuid.New(),
+			Title:           cp.Title,
+			Description:     cp.Description,
+			Requirements:    pq.StringArray(cp.Requirements),
+			TestingCode:     cp.TestFileUrl,
+			BoilerPlateCode: "", // Empty for now
+			QuestID:         questID,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+		}
+
+		if err := tx.Create(&checkpoint).Error; err != nil {
+			tx.Rollback()
+			return "", fmt.Errorf("failed to create checkpoint: %v", err)
+		}
+
+		// Associate topic with checkpoint
+		if err := tx.Model(&checkpoint).Association("Topics").Append(concepts); err != nil {
+			tx.Rollback()
+			return "", fmt.Errorf("failed to associate topic with checkpoint: %v", err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return "", fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return slug, nil
+}
+
+// Helper functions for finding existing entities
+func (s *service) findTechnology(tx *gorm.DB, name string) (*Technology, error) {
+	var tech Technology
+	result := tx.Where("name = ?", name).First(&tech)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &tech, nil
+}
+
+func (s *service) findTopic(tx *gorm.DB, name string) (*Topic, error) {
+	var topic Topic
+	result := tx.Where("name = ?", name).First(&topic)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &topic, nil
+}
+
+func (s *service) findCategory(tx *gorm.DB, name string) (*Category, error) {
+	var category Category
+	result := tx.Where("category = ?", name).First(&category)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &category, nil
+}
+
+func (s *service) findDifficulty(tx *gorm.DB, level string) (*Difficulty, error) {
+	var difficulty Difficulty
+	result := tx.Where("level = ?", level).First(&difficulty)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &difficulty, nil
+}
+
+// Generate slug from title
+func (s *service) generateSlug(title string) string {
+	slug := strings.ToLower(title)
+	slug = strings.ReplaceAll(slug, " ", "-")
+	// Remove special characters and keep only alphanumeric and hyphens
+	var result strings.Builder
+	for _, r := range slug {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }

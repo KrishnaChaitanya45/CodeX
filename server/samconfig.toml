@@ -1,9 +1,9 @@
 version = 0.1
 
 [dev.deploy.parameters]
-stack_name = "codex-quest-api"
+stack_name = "code-x-v0"
 resolve_s3 = true
-s3_prefix = "codex-quest-api"
+s3_prefix = "code-x-v0"
 region = "ap-south-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"

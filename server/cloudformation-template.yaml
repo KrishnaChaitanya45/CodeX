@@ -90,6 +90,38 @@ Resources:
             Method: get
             RestApiId: !Ref QuestApi
 
+  # Get Quest Options Lambda Function
+  GetProjectOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'codex-get-project-options-${Environment}'
+      CodeUri: builds/get-project-options.zip
+      Handler: bootstrap
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /data/options
+            Method: get
+            RestApiId: !Ref QuestApi
+
+  # Add Quest Lambda Function
+  AddQuestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'codex-add-quest-${Environment}'
+      CodeUri: builds/add-quest.zip
+      Handler: bootstrap
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /quests/add
+            Method: post
+            RestApiId: !Ref QuestApi
+
   # API Gateway
   QuestApi:
     Type: AWS::Serverless::Api
