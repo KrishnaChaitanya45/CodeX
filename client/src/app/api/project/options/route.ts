@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     // Fetch available options from server API
-    const res = await fetch(`${process.env.BACKEND_API_URL}/v0/project/options`);
+    const res = await fetch(`${process.env.BACKEND_API_URL}/v0/data/options`);
     if (!res.ok) {
       return NextResponse.json({ error: 'Failed to fetch options' }, { status: res.status });
     }
