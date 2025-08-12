@@ -18,7 +18,11 @@ import (
 
 var svc database.Service
 
-func init() { svc = &service{db: database.Connect("add_quest")} }
+func init() {
+	log.Printf("add-quest: init start")
+	svc = &service{db: database.Connect("add_quest")}
+	log.Printf("add-quest: init end")
+}
 
 // service implements the database.Service interface
 type service struct {
@@ -38,40 +42,40 @@ func (s *service) Close() error {
 }
 
 // Helper functions to find existing entities
-func (s *service) findTechnology(name string) (*database.Technology, error) {
+func (s *service) findTechnology(tx *gorm.DB, name string) (*database.Technology, error) {
 	var tech database.Technology
-	result := s.db.Where("name = ?", name).First(&tech)
+	result := tx.Where("name = ?", name).First(&tech)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &tech, nil
 }
 
-func (s *service) findTopic(name string) (*database.Topic, error) {
-	var t database.Topic
-	result := s.db.Where("name = ?", name).First(&t)
+func (s *service) findTopic(tx *gorm.DB, name string) (*database.Topic, error) {
+	var topic database.Topic
+	result := tx.Where("name = ?", name).First(&topic)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &t, nil
+	return &topic, nil
 }
 
-func (s *service) findCategory(name string) (*database.Category, error) {
-	var c database.Category
-	result := s.db.Where("category = ?", name).First(&c)
+func (s *service) findCategory(tx *gorm.DB, name string) (*database.Category, error) {
+	var category database.Category
+	result := tx.Where("category = ?", name).First(&category)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &c, nil
+	return &category, nil
 }
 
-func (s *service) findDifficulty(level string) (*database.Difficulty, error) {
-	var d database.Difficulty
-	result := s.db.Where("level = ?", level).First(&d)
+func (s *service) findDifficulty(tx *gorm.DB, level string) (*database.Difficulty, error) {
+	var difficulty database.Difficulty
+	result := tx.Where("level = ?", level).First(&difficulty)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &d, nil
+	return &difficulty, nil
 }
 
 // Generate slug from title
@@ -89,25 +93,32 @@ func generateSlug(title string) string {
 }
 
 func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
+	log.Printf("AddQuest started: Title=%s, Category=%s, Difficulty=%s", req.Title, req.Category, req.Difficulty)
+	start := time.Now()
 	// Start transaction
 	tx := s.db.Begin()
+	log.Printf("DB transaction begun in %s", time.Since(start))
 	defer func() {
 		if r := recover(); r != nil {
+			log.Printf("panic recovered after %s: %v", time.Since(start), r)
 			tx.Rollback()
 		}
 	}()
 
 	// Find technology
+	techStart := time.Now()
 	technologies := make([]*database.Technology, 0, len(req.Technology))
+	log.Printf("Finding technologies, count=%d", len(req.Technology))
 	for _, tech := range req.Technology {
+		log.Printf("Finding technology: %s", tech)
 		if tech == "" {
 			return "", fmt.Errorf("technology cannot be empty")
 		}
 		if len(tech) > 50 {
 			return "", fmt.Errorf("technology name too long: %s", tech)
 		}
-		technology, err := s.findTechnology(tech)
-
+		technology, err := s.findTechnology(tx, tech)
+		log.Printf("Technology %s found in %s", tech, time.Since(techStart))
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Create new technology if it doesn't exist
@@ -127,15 +138,18 @@ func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
 		}
 		technologies = append(technologies, technology)
 	}
+	log.Printf("Technologies found in %s", time.Since(techStart))
 
 	// Find topic (concept)
 	concepts := make([]*database.Topic, 0, len(req.Concept))
+	conceptStart := time.Now()
+	log.Printf("Finding concepts, count=%d", len(req.Concept))
 	for _, concept := range req.Concept {
 		if concept == "" {
 			return "", fmt.Errorf("concept cannot be empty")
 		}
 
-		topic, err := s.findTopic(concept)
+		topic, err := s.findTopic(tx, concept)
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				// Create new topic if it doesn't exist
@@ -155,22 +169,25 @@ func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
 		}
 		concepts = append(concepts, topic)
 	}
+	log.Printf("Concepts found in %s", time.Since(conceptStart))
 	// Find category
-	category, err := s.findCategory(req.Category)
+	category, err := s.findCategory(tx, req.Category)
 	if err != nil {
 		tx.Rollback()
 		return "", fmt.Errorf("failed to find category: %v", err)
 	}
 
 	// Find difficulty
-	difficulty, err := s.findDifficulty(req.Difficulty)
+	difficulty, err := s.findDifficulty(tx, req.Difficulty)
 	if err != nil {
 		tx.Rollback()
 		return "", fmt.Errorf("failed to find difficulty: %v", err)
 	}
+	log.Printf("Category and difficulty found as %s", difficulty.Level)
 	slug := generateSlug(req.Title)
 	// Create quest
 	questID := uuid.New()
+	log.Printf("Creating quest with ID %s", questID)
 	quest := database.Quest{
 		ID:              questID,
 		Name:            req.Title,
@@ -191,6 +208,7 @@ func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
 		tx.Rollback()
 		return "", fmt.Errorf("failed to create quest: %v", err)
 	}
+	log.Println("Quest created successfully")
 
 	// Associate technology with quest
 	if err := tx.Model(&quest).Association("TechStack").Append(technologies); err != nil {
@@ -205,6 +223,8 @@ func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
 	}
 
 	// Create checkpoints
+	cpStart := time.Now()
+	log.Printf("Creating %d checkpoints", len(req.Checkpoints))
 	for _, cp := range req.Checkpoints {
 		checkpoint := database.Checkpoint{
 			ID:              uuid.New(),
@@ -229,11 +249,13 @@ func (s *service) AddQuest(req database.AddQuestRequest) (string, error) {
 			return "", fmt.Errorf("failed to associate topic with checkpoint: %v", err)
 		}
 	}
+	log.Printf("Checkpoints created in %s", time.Since(cpStart))
 
 	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
 		return "", fmt.Errorf("failed to commit transaction: %v", err)
 	}
+	log.Printf("Quest added successfully in %s", time.Since(start))
 
 	return slug, nil
 }
@@ -272,6 +294,7 @@ func (s *service) GetAllDifficulties() []string {
 }
 
 func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	log.Printf("add-quest: handler invoked")
 	// Parse request body
 	var payload database.AddQuestRequest
 	if err := json.Unmarshal([]byte(req.Body), &payload); err != nil {
@@ -304,7 +327,9 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 	}
 
 	// Add quest to database
+	start := time.Now()
 	slug, err := svc.AddQuest(payload)
+	log.Printf("AddQuest completed in %s", time.Since(start))
 	if err != nil {
 		log.Printf("Error adding quest: %v", err)
 		return events.APIGatewayProxyResponse{
@@ -320,7 +345,7 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 	}
 
 	// Return success response
-	response := map[string]any{"success": true, slug: slug, "message": "Quest added successfully"}
+	response := map[string]any{"success": true, "slug": slug, "message": "Quest added successfully"}
 	bodyBytes, err := json.Marshal(response)
 	if err != nil {
 		log.Printf("Error marshaling response: %v", err)

@@ -1,0 +1,22 @@
+{
+  "title": "Sample Inline Project",
+  "description": "Demo project using inline boilerplate & test file content.",
+  "technology": ["HTML", "CSS", "JavaScript"],
+  "concepts": ["DOM"],
+  "category": "Web Development",
+  "difficulty": "Beginner",
+  "requirements": ["Display a heading", "Log a message to console"],
+  "boilerplate": {
+    "html": { "name": "index.html", "content": "<!DOCTYPE html><html><head><title>Inline</title></head><body><h1 id=\"app-title\">Inline Demo</h1><script src=\"script.js\"></script><link rel=\"stylesheet\" href=\"styles.css\"/></body></html>" },
+    "css":  { "name": "styles.css", "content": "body { font-family: system-ui; } h1 { color: #0af; }" },
+    "js":   { "name": "script.js", "content": "console.log('Inline sample loaded');" }
+  },
+  "checkpoints": [
+    {
+      "title": "Has heading",
+      "description": "Ensure the heading element exists",
+      "requirements": ["#app-title exists"],
+      "testFile": { "name": "cp1.test.js", "content": "export function test(){const el=document.getElementById('app-title');return {passed:!!el,message:el?\"Heading present\":\"Heading missing\"};}" }
+    }
+  ]
+}
