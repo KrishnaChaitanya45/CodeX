@@ -37,26 +37,25 @@ export async function POST(request: Request) {
     
     let s3Key: string;
     if (fileType === 'boilerplate') {
-      // For boilerplate zip file
       s3Key = `projects/${sanitizedProjectName}/boilerplate.zip`;
     } else {
-      // For test cases
-      const newFileName = `${sanitizedProjectName}}-${originalName}`;
+      const stamp = Date.now();
+      const newFileName = `${sanitizedProjectName}-${originalName}`;
       s3Key = `projects/${sanitizedProjectName}/test-cases/${newFileName}`;
     }
 
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
-        Key: s3Key,
-        Body: buffer,
-        ContentType: file.type || "application/octet-stream",
-      })
-    );
+    console.log('Uploading to S3 =>', s3Key, 'size', buffer.length, 'type', file.type);
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: file.type || 'application/octet-stream'
+    }));
+    console.log('Upload complete:', s3Key);
 
    
     
-    return NextResponse.json({ url:s3Key });
+  return NextResponse.json({ url: s3Key, key: s3Key });
 
   } catch (error: any) {
     console.error("Upload error:", error);
