@@ -222,7 +222,7 @@ const CheckpointFloatingUI: React.FC<CheckpointFloatingUIProps> = ({
 
       {/* Requirements Panel */}
       {showRequirements && currentCheckpointData && (
-        <div className="fixed top-6 right-[26rem] z-40 w-96 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50">
+        <div className="fixed top-6 right-[42rem] z-40 w-96 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 dark:border-gray-700/50">
           <div className="p-5 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
