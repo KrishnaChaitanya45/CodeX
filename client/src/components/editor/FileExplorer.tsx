@@ -19,6 +19,17 @@ interface FileExplorerProps {
   onFileSelect: (path: string) => void;
   onToggleFolder: (path: string) => void;
   onCreateFile: (path: string, type: string) => void;
+  onDeleteFile: (path: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void;
+}
+
+interface FileExplorerProps {
+  files: any;
+  activeFile: string;
+  expandedFolders: Set<string>;
+  onFileSelect: (path: string) => void;
+  onToggleFolder: (path: string) => void;
+  onCreateFile: (path: string, type: string) => void;
   onCreateFolder: (path: string) => void;
 }
 
@@ -46,6 +57,8 @@ export function FileExplorer({
   const [newFileName, setNewFileName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedFileType, setSelectedFileType] = useState('txt');
+  const [editingFile, setEditingFile] = useState<string | null>(null);
+  const [editingFileName, setEditingFileName] = useState('');
   
   const getFileIcon = (fileName: string) => {
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -77,6 +90,29 @@ export function FileExplorer({
       setNewFolderName('');
       setShowNewFolderDialog(false);
     }
+  };
+
+  const handleFileRename = (oldPath: string, newName: string) => {
+    if (newName.trim() && newName !== oldPath.split('/').pop()) {
+      const pathParts = oldPath.split('/');
+      pathParts[pathParts.length - 1] = newName;
+      const newPath = pathParts.join('/');
+      
+      // TODO: Add onRenameFile to props and call it here
+      console.log('Rename:', oldPath, '->', newPath);
+    }
+    setEditingFile(null);
+    setEditingFileName('');
+  };
+
+  const startEditing = (filePath: string) => {
+    setEditingFile(filePath);
+    setEditingFileName(filePath.split('/').pop() || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingFile(null);
+    setEditingFileName('');
   };
 
   const renderFileTree = (files: any, path = '') => {
@@ -117,22 +153,80 @@ export function FileExplorer({
         const isActive = activeFile === fullPath;
         const ext = name.split('.').pop()?.toLowerCase();
         const fileType = SUPPORTED_FILE_TYPES.find(type => type.ext === ext);
+        const isEditing = editingFile === fullPath;
+        
+        if (isEditing) {
+          return (
+            <motion.div
+              key={fullPath}
+              className="flex items-center px-2 py-1 rounded bg-primary-900/20"
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+            >
+              {getFileIcon(name)}
+              <input
+                type="text"
+                value={editingFileName}
+                onChange={(e) => setEditingFileName(e.target.value)}
+                className="flex-1 px-1 py-0 bg-dark-700 border border-primary-500 rounded text-white text-sm focus:outline-none focus:border-primary-400"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleFileRename(fullPath, editingFileName);
+                  } else if (e.key === 'Escape') {
+                    cancelEditing();
+                  }
+                }}
+                onBlur={() => handleFileRename(fullPath, editingFileName)}
+                autoFocus
+              />
+              <div className="flex items-center ml-2 gap-1">
+                <button
+                  onClick={() => handleFileRename(fullPath, editingFileName)}
+                  className="p-1 text-green-400 hover:text-green-300 rounded"
+                  title="Save (Enter)"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={cancelEditing}
+                  className="p-1 text-red-400 hover:text-red-300 rounded"
+                  title="Cancel (Esc)"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </motion.div>
+          );
+        }
         
         return (
           <motion.div
             key={fullPath}
-            className={`flex items-center px-2 py-1 cursor-pointer rounded transition-colors ${
+            className={`flex items-center px-2 py-1 cursor-pointer rounded transition-colors group ${
               isActive 
                 ? 'bg-secondary-600/30 border-l-2 border-secondary-500' 
                 : 'hover:bg-primary-900/20'
             }`}
             onClick={() => onFileSelect(fullPath)}
+            onDoubleClick={() => startEditing(fullPath)}
             whileHover={{ x: 2 }}
           >
             {getFileIcon(name)}
-            <span className={`text-sm ${isActive ? 'text-secondary-200' : fileType?.color || 'text-dark-300'}`}>
+            <span className={`text-sm flex-1 ${isActive ? 'text-secondary-200' : fileType?.color || 'text-dark-300'}`}>
               {name}
             </span>
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center ml-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEditing(fullPath);
+                }}
+                className="p-1 text-dark-400 hover:text-white rounded"
+                title="Rename (Double-click)"
+              >
+                <FileText className="w-3 h-3" />
+              </button>
+            </div>
           </motion.div>
         );
       }

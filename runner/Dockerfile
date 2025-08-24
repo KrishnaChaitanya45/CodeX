@@ -11,20 +11,22 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/runner .
 
 # --- Final Stage ---
-# Use a distroless static image for a minimal attack surface.
-FROM gcr.io/distroless/static-debian11
+# Use alpine as the base image. It's very small but includes the 'sh' shell.
+FROM alpine:latest
+
+# Create a non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
 # Copy the compiled binary from the builder stage.
 COPY --from=builder /app/runner .
 
-# Create a non-root user and group. Distroless images don't have user management tools,
-# so we specify the user and group IDs directly.
-USER 65532:65532
+# Set the owner of the app directory to the new user
+RUN chown -R appuser:appgroup /app
 
-# The WORKSPACE_DIR environment variable will be set in the Kubernetes deployment.
-# We don't need to create it here as the shared volume will be mounted at runtime.
+# Switch to the non-root user
+USER appuser
 
 # Expose the ports for the file system and pseudo-terminal services.
 EXPOSE 8081 8082

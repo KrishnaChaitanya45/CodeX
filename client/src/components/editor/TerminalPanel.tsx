@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal } from 'lucide-react';
-
+import dynamic from 'next/dynamic';
+const XTerminal = dynamic(() => import("../Terminal"));
 interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
   message: string;
@@ -43,18 +44,7 @@ export function TerminalPanel({ logs, isRunning, onClear }: TerminalPanelProps) 
         </motion.button>
       </div>
       <div className="flex-1 p-3 overflow-y-auto font-mono text-sm">
-        {logs.map((log, index) => (
-          <LogItem key={index} log={log} className={getLogColor(log.type)} />
-        ))}
-        {isRunning && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-purple-400"
-          >
-            <span className="animate-pulse">Running...</span>
-          </motion.div>
-        )}
+      <XTerminal />
       </div>
     </div>
   );

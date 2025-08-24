@@ -77,7 +77,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   const CollapsedView = () => (
     <motion.div
       className="fixed z-50 cursor-pointer"
-      style={{ left: position.x, top: position.y }}
+      style={{ right: position.x, top: position.y }}
       initial={{ scale: 0 }}
       animate={{ scale: 1 }}
       whileHover={{ scale: 1.1 }}

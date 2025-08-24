@@ -2,9 +2,13 @@
 export const mockFiles = {
   'src': {
     type: 'folder',
+    path: 'src',
+    isDir: true,
     children: {
       'index.html': { 
-        type: 'file', 
+        type: 'file',
+        path: 'src/index.html',
+        isDir: false,
         content: `<!DOCTYPE html>
 <html>
 <head>
@@ -21,7 +25,9 @@ export const mockFiles = {
 </html>` 
       },
       'styles.css': { 
-        type: 'file', 
+        type: 'file',
+        path: 'src/styles.css',
+        isDir: false,
         content: `body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -55,7 +61,9 @@ button:hover {
 }` 
       },
       'script.js': { 
-        type: 'file', 
+        type: 'file',
+        path: 'src/script.js',
+        isDir: false,
         content: `function handleClick() {
   alert("Hello from JavaScript!");
   console.log("Button clicked!");
@@ -66,7 +74,9 @@ console.log("App loaded successfully!");`
     }
   },
   'package.json': { 
-    type: 'file', 
+    type: 'file',
+    path: 'package.json',
+    isDir: false,
     content: `{
   "name": "my-project",
   "version": "1.0.0",
@@ -75,7 +85,9 @@ console.log("App loaded successfully!");`
 }` 
   },
   'README.md': { 
-    type: 'file', 
+    type: 'file',
+    path: 'README.md',
+    isDir: false,
     content: `# My Project
 
 This is a sample project created in the DevArena editor.

@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Eye,
@@ -19,29 +19,17 @@ export function PreviewPanel({
   htmlContent, 
   cssContent, 
   jsContent, 
-  onRefresh,
   onExport 
 }: PreviewPanelProps) {
-  
-  const getPreviewContent = () => {
-    // Clean HTML content by removing external links and scripts
-    const cleanedHtml = htmlContent
-      .replace(/<link[^>]*>/gi, '')
-      .replace(/<script[^>]*>[^<]*<\/script>/gi, '');
-    
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>${cssContent}</style>
-        </head>
-        <body>
-          ${cleanedHtml}
-          <script>${jsContent}</script>
-        </body>
-      </html>
-    `;
-  };
+  const iFrameRef = useRef<HTMLIFrameElement | null>(null);
+
+  function onRefresh() {
+    // Trigger a refresh of the preview
+    //refresh the iframe and reload the page
+    if (iFrameRef.current) {
+      iFrameRef.current.contentWindow?.location.reload();
+    }
+  }
 
   return (
     <div className="h-full bg-white">
@@ -63,7 +51,9 @@ export function PreviewPanel({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={onExport}
+            onClick={()=>{
+              window.open('http://test.quest.arenas.devsarena.in/','_blank');
+            }}
             className="p-1 text-gray-400 hover:text-white transition-colors"
             title="Export Project"
           >
@@ -72,10 +62,9 @@ export function PreviewPanel({
         </div>
       </div>
       <iframe
-        srcDoc={getPreviewContent()}
+        src='http://test.quest.arenas.devsarena.in/'
         className="w-full h-full border-none"
-        sandbox="allow-scripts"
-        title="Preview"
+      
       />
     </div>
   );

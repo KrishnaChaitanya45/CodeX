@@ -12,7 +12,7 @@ var (
 	S3_MAX_RETRIES       = 3
 	PING_INTERVAL        = 10 * time.Second
 	PONG_WAIT_DURATION   = (PING_INTERVAL * 9) / 10
-	READ_LIMIT           = int64(1024)
+	READ_LIMIT           = int64(1024 * 1024 * 5) // 5 MB
 )
 
 func main() {

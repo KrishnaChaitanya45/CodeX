@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -34,16 +33,9 @@ func InitWorkspaceDir() error {
 
 // Safely join path components to prevent directory traversal
 func safeJoinPath(basePath, userPath string) string {
-	// Clean the user path and remove any leading slashes
-	cleanPath := filepath.Clean(strings.TrimPrefix(userPath, "/"))
 
 	// Join with base path
-	fullPath := filepath.Join(basePath, cleanPath)
-
-	// Ensure the result is still within the base directory
-	if !strings.HasPrefix(fullPath, basePath) {
-		return basePath
-	}
+	fullPath := filepath.Join(basePath, userPath)
 
 	return fullPath
 }
@@ -117,14 +109,14 @@ func FetchFileContentHandler(ctx context.Context, payload json.RawMessage, clien
 
 // Update file content
 func FileContentUpdateHandler(ctx context.Context, payload json.RawMessage, client *Client) error {
+
 	var req FileContentUpdatePayload
 	if err := json.Unmarshal(payload, &req); err != nil {
 		return fmt.Errorf("failed to unmarshal file content update payload: %w", err)
 	}
-
 	workspaceDir := getWorkspaceDir()
 	targetPath := safeJoinPath(workspaceDir, req.Path)
-
+	log.Printf("Updating file at path: %s", targetPath)
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 		return fmt.Errorf("failed to create parent directories for %s: %w", targetPath, err)

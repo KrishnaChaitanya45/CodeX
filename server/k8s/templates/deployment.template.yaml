@@ -19,7 +19,10 @@ spec:
       volumes:
         - name: workspace-volume
           emptyDir: {}
-
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       initContainers:
         - name: copy-s3-content
           image: amazon/aws-cli:latest
@@ -112,8 +115,3 @@ spec:
             - name: workspace-volume
               mountPath: /workspace
           workingDir: /workspace
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - "ALL"

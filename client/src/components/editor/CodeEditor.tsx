@@ -1,14 +1,20 @@
 "use client";
-import React from 'react';
-import { motion } from 'framer-motion';
-import Editor from '@monaco-editor/react';
-import { 
-  File, 
-  Play, 
-  Square, 
-  Settings,
-  Save
-} from 'lucide-react';
+import React, { useState, useCallback, useMemo, useRef } from "react";
+import { motion } from "framer-motion";
+import { File, Play, Square, Settings, Save } from "lucide-react";
+import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+
+// Import CodeMirror extensions
+import { javascript } from "@codemirror/lang-javascript";
+import { html } from "@codemirror/lang-html";
+import { css} from "@codemirror/lang-css";
+import { json } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
+import { keymap } from "@codemirror/view";
+import { indentWithTab } from "@codemirror/commands";
+import {  tokyoNight} from "../../constants/TokyoNight";
+import { linter, lintGutter } from "@codemirror/lint";
+
 
 interface CodeEditorProps {
   activeFile: string;
@@ -17,107 +23,96 @@ interface CodeEditorProps {
   onCodeChange: (value: string) => void;
   onRun: () => void;
   onSave?: () => void;
+  isFileDirty: boolean;
 }
 
-export function CodeEditor({ 
-  activeFile, 
-  fileContent, 
-  isRunning, 
-  onCodeChange, 
+export function CodeEditor({
+  activeFile,
+  fileContent,
+  isRunning,
+  onCodeChange,
   onRun,
-  onSave 
+  onSave,
+  isFileDirty,
 }: CodeEditorProps) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
   
+
   const getFileIcon = (fileName: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
+    const ext = fileName.split(".").pop()?.toLowerCase();
     const iconClass = "w-4 h-4 mr-2";
-    
+
     switch (ext) {
-      case 'html': return <File className={`${iconClass} text-red-400`} />;
-      case 'css': return <File className={`${iconClass} text-blue-400`} />;
-      case 'js': return <File className={`${iconClass} text-yellow-400`} />;
-      case 'json': return <File className={`${iconClass} text-green-400`} />;
-      case 'md': return <File className={`${iconClass} text-gray-400`} />;
+      case "html": return <File className={`${iconClass} text-red-400`} />;
+      case "css": return <File className={`${iconClass} text-blue-400`} />;
+      case "js": case "jsx": return <File className={`${iconClass} text-yellow-400`} />;
+      case "ts": case "tsx": return <File className={`${iconClass} text-blue-300`} />;
+      case "json": return <File className={`${iconClass} text-green-400`} />;
+      case "md": return <File className={`${iconClass} text-gray-400`} />;
       default: return <File className={`${iconClass} text-gray-400`} />;
     }
   };
 
-  const getLanguageFromFile = (fileName: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
+  const getLanguageConfig = (fileName: string) => {
+    const ext = fileName.split(".").pop()?.toLowerCase();
     switch (ext) {
-      case 'html': return 'html';
-      case 'css': return 'css';
-      case 'js': return 'javascript';
-      case 'json': return 'json';
-      case 'md': return 'markdown';
-      default: return 'plaintext';
+      case "js": case "jsx": return { extension: [javascript({ jsx: true })], parser: "babel" };
+      case "ts": case "tsx": return { extension: [javascript({ jsx: true, typescript: true })], parser: "typescript" };
+      case "html": return { extension: [html()], parser: "html" };
+      case "css": return { extension: [css()], parser: "css" };
+      case "json": return { extension: [json()], parser: "json" };
+      case "md": return { extension: [markdown()], parser: "markdown" };
+      default: return { extension: [], parser: "babel" }; // Default to babel for unknown types
     }
   };
 
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY });
+  };
+  
+  const { extension } = getLanguageConfig(activeFile);
+  const extensions = useMemo(() => [
+    ...extension,
+    keymap.of([indentWithTab]),
+    lintGutter()
+  ], [extension]);
+
   return (
-    <div className="h-full bg-black flex flex-col">
+    <div className="h-full bg-black flex flex-col" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)}>
       {/* Editor Header */}
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-3 border-b border-purple-600/30 flex items-center justify-between">
         <div className="flex items-center">
-          {getFileIcon(activeFile.split('/').pop() || '')}
+          {getFileIcon(activeFile.split("/").pop() || "")}
           <span className="text-white font-medium">{activeFile}</span>
         </div>
         <div className="flex items-center gap-2">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onRun}
-            disabled={isRunning}
-            className="flex items-center px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white text-sm rounded transition-colors"
-          >
-            {isRunning ? (
-              <Square className="w-4 h-4 mr-1" />
-            ) : (
-              <Play className="w-4 h-4 mr-1" />
-            )}
-            {isRunning ? 'Stop' : 'Run'}
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onSave}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
-          >
-            <Save className="w-4 h-4" />
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-          </motion.button>
+          {/* Action buttons */}
         </div>
       </div>
-      
-      {/* Monaco Editor */}
-      <div className="flex-1">
-        <Editor
-          height="100%"
-          language={getLanguageFromFile(activeFile)}
+
+      {/* CodeMirror Editor */}
+      <div className="flex-1 overflow-y-auto h-full">
+        <CodeMirror
+          ref={editorRef}
           value={fileContent}
-          onChange={(value) => onCodeChange(value || '')}
-          theme="vs-dark"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: 'on',
-            roundedSelection: false,
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            tabSize: 2,
-            wordWrap: 'on',
-            folding: true,
-            cursorBlinking: 'blink',
-            cursorSmoothCaretAnimation: 'on'
-          }}
+          height="100%"
+          theme={tokyoNight}
+          extensions={extensions}
+          onChange={onCodeChange}
+          style={{ fontSize: 14, height: '100%' }}
         />
       </div>
+      
+      {/* Custom Context Menu */}
+      {contextMenu && (
+        <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
+          <ul>
+           
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
