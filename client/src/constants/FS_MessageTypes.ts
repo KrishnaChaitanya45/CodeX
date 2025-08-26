@@ -6,6 +6,12 @@ export const FS_NEW_FILE = "fs_new_file";
 export const FS_DELETE_FILE = "fs_delete_file";
 export const FS_EDIT_FILE_META = "fs_edit_file_meta";
 export const FS_FETCH_QUEST_META = "fs_fetch_quest_meta";
+export const FS_INITIALIZE_CLIENT = "fs_initialize_client";
+
+export type ProjectParams = {
+    labId:string;
+    language:string
+}
 
 export type FSMessageType =
     | typeof FS_FILE_CONTENT_UPDATE

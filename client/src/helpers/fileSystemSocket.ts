@@ -1,3 +1,4 @@
+
 import { WSResponse, FSMessageType, EventMessage } from '../constants/FS_MessageTypes';
 
 class FileSystemSocket {
@@ -22,10 +23,61 @@ class FileSystemSocket {
   private connectionPromise: Promise<void> | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
+  private maxReconnectAttempts = 10;
+  private reconnectDelay = 300;
   // Toggle detailed debug logging for handshake/correlation issues
   private debug = false;
+
+async sleep (ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async  checkIfAvailable(url: string): Promise<boolean> {
+  url = url.replace('ws://', 'http://').replace('wss://', 'https://');
+  const maxRetries = 4;
+  const delays = [1000, 2000, 3000]; // Delay after 1st failure, and after 2nd failure
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempt #${attempt}: Checking URL: ${url}`);
+      const response = await fetch(url, { method: 'HEAD' });
+
+      // Case 1: Pod is initializing (503). This is a "good" sign.
+      if (response.status === 503 || response.status === 502) {
+        console.log(`Attempt #${attempt}: Received 503 Service Unavailable. Pod is loading. Returning true.`);
+        return true;
+      }
+         if (response.status === 400) {
+        console.log(`Attempt #${attempt}: Received 400 Bad Request. Returning true as per custom logic.`);
+        return true;
+      }
+
+      // Case 2: Pod is ready and service is available (200-299).
+      if (response.ok) {
+        console.log(`Attempt #${attempt}: Success! Status is ${response.status}. Returning true.`);
+        return true;
+      }
+
+      // Case 3: NGINX returns 404 or another error. Treat as unavailable and retry.
+      console.log(`Attempt #${attempt}: Failed with status ${response.status}.`);
+
+    } catch (error) {
+      // Case 4: Network error (e.g., DNS resolution failed). Treat as unavailable and retry.
+      console.error(`Attempt #${attempt}: Network error during fetch.`, error);
+    }
+
+    // If this wasn't the last attempt, wait before trying again.
+    if (attempt < maxRetries) {
+      const delay = delays[attempt - 1];
+      console.log(`Waiting for ${delay / 1000}s before next attempt...`);
+      await this.sleep(delay);
+    }
+  }
+
+  // If the loop completes, all attempts have failed.
+  console.log('All attempts failed. The service is not available. Returning false.');
+  return false;
+}
 
   async connect(url: string): Promise<void> {
     // Return existing connection promise if already connecting

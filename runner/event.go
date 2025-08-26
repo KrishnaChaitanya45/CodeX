@@ -10,7 +10,13 @@ var (
 	FS_DELETE_FILE         = "fs_delete_file"
 	FS_EDIT_FILE_META      = "fs_edit_file_meta"
 	FS_FETCH_QUEST_META    = "fs_fetch_quest_meta"
+	FS_INITIALIZE_CLIENT   = "fs_initialize_client"
 )
+
+type InitializeClient struct {
+	Language string `json:"language,omitempty"`
+	LabID    string `json:"labId,omitempty"`
+}
 
 type Event struct {
 	Type    string          `json:"type"`

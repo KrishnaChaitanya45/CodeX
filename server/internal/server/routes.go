@@ -34,6 +34,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.HandlerFunc(http.MethodPost, "/project/add", s.AddProjectHandler)
 
 	r.HandlerFunc(http.MethodPost, "/v1/start/quest", s.StartLabHandler)
+	r.HandlerFunc(http.MethodPost, "/v1/end/quest", s.EndLabHandler)
 
 	return corsWrapper
 }
@@ -81,8 +82,16 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 
-	language := r.URL.Query().Get("language")
-	labId := r.URL.Query().Get("labId")
+	var req struct {
+		Language string `json:"language"`
+		LabID    string `json:"labId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+	language := req.Language
+	labId := req.LabID
 	if language == "" {
 		http.Error(w, "Missing language query parameter", http.StatusBadRequest)
 		return
@@ -103,19 +112,21 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 	// }
 
 	params := struct {
-		LabID     string
-		Language  string
-		AppName   string
-		S3Bucket  string
-		S3Key     string
-		Namespace string
+		LabID                 string
+		Language              string
+		AppName               string
+		S3Bucket              string
+		S3Key                 string
+		Namespace             string
+		ShouldCreateNamespace bool
 	}{
-		LabID:     labId,
-		Language:  language,
-		AppName:   fmt.Sprintf("%s-%s", language, labId),
-		S3Bucket:  os.Getenv("AWS_S3_BUCKET_NAME"),
-		S3Key:     destinationKey,
-		Namespace: "devsarena",
+		LabID:                 labId,
+		Language:              language,
+		AppName:               fmt.Sprintf("%s-%s", language, labId),
+		S3Bucket:              os.Getenv("AWS_S3_BUCKET_NAME"),
+		S3Key:                 destinationKey,
+		Namespace:             "devsarena",
+		ShouldCreateNamespace: true,
 	}
 	log.Printf("Starting to spin up resources for LabID: %s", params.LabID)
 
@@ -130,6 +141,43 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 	err = k8s.SpinUpPodWithLanguage(params)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to spin up pod: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) EndLabHandler(w http.ResponseWriter, r *http.Request) {
+	language := r.URL.Query().Get("language")
+	labId := r.URL.Query().Get("labId")
+	if language == "" || labId == "" {
+		http.Error(w, "Missing language or labId query parameter", http.StatusBadRequest)
+		return
+	}
+
+	params := struct {
+		LabID     string
+		Language  string
+		AppName   string
+		Namespace string
+	}{
+		LabID:     labId,
+		Language:  language,
+		AppName:   fmt.Sprintf("%s-%s", language, labId),
+		Namespace: "devsarena",
+	}
+
+	err := k8s.InitK8sClient()
+	if err != nil {
+		log.Printf("Failed to initialize kubernetes client: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to initialize kubernetes client: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Tearing down resources for LabID: %s", params.LabID)
+	if err = k8s.TearDownPodWithLanguage(params); err != nil {
+		log.Printf("Failed to teardown resources: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to teardown resources: %v", err), http.StatusInternalServerError)
 		return
 	}
 

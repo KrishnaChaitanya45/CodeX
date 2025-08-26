@@ -78,6 +78,7 @@ func (m *WSManager) setupHandlers() {
 	m.fsHandlers[FS_DELETE_FILE] = DeleteFileHandler
 	m.fsHandlers[FS_EDIT_FILE_META] = EditFileMetaHandler
 	m.fsHandlers[FS_FETCH_QUEST_META] = FetchQuestMetaHandler
+	m.fsHandlers[FS_INITIALIZE_CLIENT] = InitializeClientHandler
 }
 
 func (m *WSManager) routeEvent(event Event, client *Client) error {

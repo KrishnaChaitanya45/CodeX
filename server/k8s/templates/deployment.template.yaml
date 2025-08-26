@@ -56,6 +56,8 @@ spec:
               containerPort: 5173
             - name: user-app-serve # Port for 'serve' package
               containerPort: 3000
+            - name: pty-ws # WebSocket for the pseudo-terminal
+              containerPort: 8082
           resources:
             requests:
               cpu: "100m"
@@ -67,20 +69,12 @@ spec:
             - name: workspace-volume
               mountPath: /workspace
           workingDir: /workspace
-          command: ["/bin/sh", "-c", "tail -f /dev/null"]
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - "ALL"
 
         - name: runner-container
           image: krishnawyvern/devsarena-runner-service
           ports:
             - name: fs-ws # WebSocket for file system events
               containerPort: 8081
-            - name: pty-ws # WebSocket for the pseudo-terminal
-              containerPort: 8082
           resources:
             requests:
               cpu: "100m"

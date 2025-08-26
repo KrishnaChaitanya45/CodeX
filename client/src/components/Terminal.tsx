@@ -2,6 +2,15 @@
 import React, { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css'; // Import the CSS for styling
+import { ProjectParams } from '@/constants/FS_MessageTypes';
+import { buildPtyUrl } from '@/lib/pty';
+
+const TerminalComponent = ({ params }: { params: ProjectParams }) => {
+  const terminalRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!terminalRef.current || typeof window === 'undefined') return;
+
     const term = new Terminal({
       cursorBlink: true,
       theme: {
@@ -10,27 +19,32 @@ import '@xterm/xterm/css/xterm.css'; // Import the CSS for styling
       },
     });
 
+    term.open(terminalRef.current);
 
-    
-  
-const TerminalComponent = () => {
-  const terminalRef = useRef(null);
-
-  useEffect(() => {
-    if (!terminalRef.current) {
+    const labId = params?.labId;
+    if (!labId || labId === '') {
+      term.writeln('No lab ID provided. Terminal unavailable.');
       return;
     }
 
-    term.open(terminalRef.current);
-    
+    // Determine protocol based on current page
+    let socket: WebSocket | null = null;
+    try {
+      const ptyUrl = buildPtyUrl(labId);
+      socket = new WebSocket(ptyUrl);
+    } catch (e) {
+      console.error('Terminal socket creation error', e);
+    }
 
-    // --- WebSocket Connection ---
-    // Use wss:// for secure connections (HTTPS)
-    const socket = new WebSocket('ws://test.quest.arenas.devsarena.in/pty');
+    if (!socket) {
+      term.writeln('Failed to create terminal connection.');
+      return;
+    }
 
     // When the connection opens, print a welcome message
     socket.onopen = () => {
-      term.writeln('Welcome to the interactive terminal!');
+      term.writeln('Welcome to DevsArena!');
+      term.writeln('You can now run commands in your workspace.');
       term.writeln('');
     };
 
@@ -40,30 +54,39 @@ const TerminalComponent = () => {
     };
 
     // When the user types in the terminal, send the data to the Go backend
-    term.onData((data) => {
-      // Your Go backend expects a JSON object with a "data" key
-      const message = JSON.stringify({ data: data });
-      socket.send(message);
-    });
+    const onData = (data: string) => {
+      const message = JSON.stringify({ data });
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(message);
+      }
+    };
+    term.onData(onData);
 
     // Handle connection closing
-    socket.onclose = () => {
-      term.writeln('');
-      term.writeln('Connection closed.');
+    socket.onclose = (event) => {
+      if (event.code !== 1000) {
+        term.writeln('');
+        term.writeln('Connection to terminal lost. Reconnecting...');
+      }
     };
 
     // Handle errors
     socket.onerror = (error) => {
-      console.error('WebSocket Error:', error);
-      term.writeln('An error occurred with the connection.');
+      term.writeln('Terminal connection error occurred.');
     };
 
     // Clean up on component unmount
     return () => {
-      socket.close();
-      term.dispose();
+      try {
+        if (socket) {
+          socket.close();
+        }
+      } catch {}
+      try {
+        term.dispose();
+      } catch {}
     };
-  }, []);
+  }, [params?.labId]);
 
   return <div ref={terminalRef} style={{ height: '100%', width: '100%' }} />;
 };

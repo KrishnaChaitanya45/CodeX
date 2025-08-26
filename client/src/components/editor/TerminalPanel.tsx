@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal } from 'lucide-react';
 import dynamic from 'next/dynamic';
-const XTerminal = dynamic(() => import("../Terminal"));
+import { ProjectParams } from '@/constants/FS_MessageTypes';
+const XTerminal = dynamic(() => import("../Terminal"), {ssr: false});
 interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
   message: string;
@@ -14,9 +15,10 @@ interface TerminalPanelProps {
   logs: LogEntry[];
   isRunning: boolean;
   onClear: () => void;
+  params: ProjectParams
 }
 
-export function TerminalPanel({ logs, isRunning, onClear }: TerminalPanelProps) {
+export function TerminalPanel({ logs, isRunning, onClear, params }: TerminalPanelProps) {
   
   const getLogColor = (type: string) => {
     switch (type) {
@@ -44,7 +46,7 @@ export function TerminalPanel({ logs, isRunning, onClear }: TerminalPanelProps) 
         </motion.button>
       </div>
       <div className="flex-1 p-3 overflow-y-auto font-mono text-sm">
-      <XTerminal />
+      <XTerminal params={params}/>
       </div>
     </div>
   );

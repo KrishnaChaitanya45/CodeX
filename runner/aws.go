@@ -47,10 +47,10 @@ type S3UpdateQueue struct {
 
 // init initializes the S3 client from environment variables.
 func init() {
-	// s3Bucket = os.Getenv("AWS_S3_BUCKET_NAME")
-	// if s3Bucket == "" {
-	// 	log.Fatal("AWS_S3_BUCKET_NAME environment variable not set.")
-	// }
+	s3Bucket = os.Getenv("AWS_S3_BUCKET_NAME")
+	if s3Bucket == "" {
+		log.Fatal("AWS_S3_BUCKET_NAME environment variable not set.")
+	}
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -63,12 +63,9 @@ func init() {
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
-	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
-	}
 
 	s3Client = s3.NewFromConfig(cfg)
-	log.Println("S3 client initialized successfully.")
+	log.Println("S3 client initialized successfully.", s3Bucket)
 }
 
 // queueS3Update adds an S3 operation to the processing queue.

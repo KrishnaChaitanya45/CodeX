@@ -16,49 +16,25 @@ var (
 )
 
 func main() {
+	ctx := context.Background()
 
-	rootCtx := context.Background()
-	ctx, cancel := context.WithCancel(rootCtx)
-
-	defer cancel()
-
-	// Initialize workspace directory
 	if err := InitWorkspaceDir(); err != nil {
 		log.Fatal("Failed to initialize workspace:", err)
 	}
 
-	// Start S3 batch processor
 	startS3BatchProcessor()
 
-	// Start the File System WebSocket server on port 8081
-	go func() {
-		fsMux := http.NewServeMux()
-		manager := NewFSManager(ctx)
-		manager.setupHandlers()
-		fsMux.HandleFunc("/fs", manager.serveFS)
-		fsMux.HandleFunc("/fs/health", HealthCheckHandler)
-		if err := http.ListenAndServe(":8081", fsMux); err != nil {
-			log.Fatal("File system server error: ", err)
-		}
-	}()
+	fsMux := http.NewServeMux()
+	manager := NewFSManager(ctx)
+	manager.setupHandlers()
+	fsMux.HandleFunc("/fs", manager.serveFS)
+	fsMux.HandleFunc("/fs/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
-	// Start the Pseudo-Terminal WebSocket server on port 8082
-	go func() {
-		ptyMux := http.NewServeMux()
-		ptyMux.HandleFunc("/pty", servePty)
-		ptyMux.HandleFunc("/pty/health", HealthCheckHandler)
-		if err := http.ListenAndServe(":8082", ptyMux); err != nil {
-			log.Fatal("Pseudo-terminal server error: ", err)
-		}
-	}()
-
-	log.Println("All services started. The application is running.")
-	// Keep the main goroutine alive
-	select {}
-
-}
-
-func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	log.Println("File system service starting on :8081")
+	if err := http.ListenAndServe(":8081", fsMux); err != nil {
+		log.Fatal("File system server error: ", err)
+	}
 }

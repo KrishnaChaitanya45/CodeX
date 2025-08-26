@@ -17,11 +17,19 @@ import (
 
 // SpinUpParams holds all the variables needed for the templates.
 type SpinUpParams struct {
+	LabID                 string
+	Language              string
+	AppName               string
+	S3Bucket              string
+	S3Key                 string
+	Namespace             string
+	ShouldCreateNamespace bool
+}
+
+type SpinDownParams struct {
 	LabID     string
 	Language  string
 	AppName   string
-	S3Bucket  string
-	S3Key     string
 	Namespace string
 }
 
@@ -29,9 +37,12 @@ type SpinUpParams struct {
 func SpinUpPodWithLanguage(params SpinUpParams) error {
 	log.Printf("Starting to spin up resources for LabID: %s, S3Bucket: %s, S3Key: %s", params.LabID, params.S3Bucket, params.S3Key)
 
-	if err := CreateNamespaceFromYamlIfDoesNotExists(params); err != nil {
-		return fmt.Errorf("could not create namespace: %w", err)
+	if params.ShouldCreateNamespace {
+		if err := CreateNamespaceFromYamlIfDoesNotExists(params); err != nil {
+			return fmt.Errorf("could not create namespace: %w", err)
+		}
 	}
+
 	if err := CreateDeploymentFromYamlIfDoesNotExists(params); err != nil {
 		return fmt.Errorf("could not create deployment: %w", err)
 	}
@@ -177,4 +188,43 @@ func CreateIngressFromYamlIfDoesNotExists(params SpinUpParams) error {
 	log.Printf("Creating ingress '%s'", ingress.Name)
 	_, err = ClientSet.NetworkingV1().Ingresses(params.Namespace).Create(context.TODO(), &ingress, metav1.CreateOptions{})
 	return err
+}
+
+// TearDownPodWithLanguage removes the resources created for a lab.
+func TearDownPodWithLanguage(params SpinDownParams) error {
+	if ClientSet == nil {
+		return fmt.Errorf("kubernetes client not initialized; call k8s.InitK8sClient() before using k8s functions")
+	}
+
+	deploymentName := fmt.Sprintf("%s-deployment", params.LabID)
+	serviceName := fmt.Sprintf("%s-service", params.LabID)
+	ingressName := fmt.Sprintf("%s-ingress", params.LabID)
+
+	// Delete Deployment
+	if err := ClientSet.AppsV1().Deployments(params.Namespace).Delete(context.TODO(), deploymentName, metav1.DeleteOptions{}); err != nil {
+		if !errors.IsNotFound(err) {
+			log.Printf("Failed to delete deployment %s: %v", deploymentName, err)
+			return err
+		}
+	}
+
+	// Delete Service
+	if err := ClientSet.CoreV1().Services(params.Namespace).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
+		if !errors.IsNotFound(err) {
+			log.Printf("Failed to delete service %s: %v", serviceName, err)
+			return err
+		}
+	}
+
+	// Delete Ingress
+	if err := ClientSet.NetworkingV1().Ingresses(params.Namespace).Delete(context.TODO(), ingressName, metav1.DeleteOptions{}); err != nil {
+		if !errors.IsNotFound(err) {
+			log.Printf("Failed to delete ingress %s: %v", ingressName, err)
+			return err
+		}
+	}
+
+	// Optionally delete namespace if desired - skipping to keep shared namespace
+	log.Printf("Teardown completed for LabID: %s", params.LabID)
+	return nil
 }

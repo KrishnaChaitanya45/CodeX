@@ -11,7 +11,30 @@ import (
 	"time"
 )
 
+var (
+	LAB_ID   = ""
+	LANGUAGE = ""
+)
+
 type fsHandler func(ctx context.Context, payload json.RawMessage, client *Client) error
+
+func InitializeClientHandler(ctx context.Context, payload json.RawMessage, client *Client) error {
+	var req InitializeClient
+	if err := json.Unmarshal(payload, &req); err != nil {
+		return fmt.Errorf("failed to unmarshal initialize client payload: %w", err)
+	}
+
+	LANGUAGE = req.Language
+	LAB_ID = req.LabID
+
+	log.Printf("Client initialized with Language: %s, LabID: %s", LANGUAGE, LAB_ID)
+
+	return client.SendResponse(RESPONSE_INFO, map[string]string{
+		"message":  "Client initialized",
+		"language": LANGUAGE,
+		"labId":    LAB_ID,
+	})
+}
 
 // Get workspace directory from environment or default
 func getWorkspaceDir() string {
@@ -126,8 +149,11 @@ func FileContentUpdateHandler(ctx context.Context, payload json.RawMessage, clie
 		return fmt.Errorf("failed to write file %s: %w", targetPath, err)
 	}
 
+	fileUpdatePath := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.Path)
+	log.Printf("FILE PATH: %s", fileUpdatePath)
+
 	// Queue S3 sync for file update
-	go queueS3Update("update", req.Path, req.Content)
+	go queueS3Update("update", fileUpdatePath, req.Content)
 
 	return client.SendResponse(RESPONSE_FILE_UPDATED, map[string]interface{}{
 		"path":    req.Path,

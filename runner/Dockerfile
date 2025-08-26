@@ -29,6 +29,6 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 
 # Expose the ports for the file system and pseudo-terminal services.
-EXPOSE 8081 8082
+EXPOSE 8081
 
 ENTRYPOINT ["/app/runner"]
