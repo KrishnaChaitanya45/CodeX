@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Components
-import FileExplorer from '@/components/FileExplorer';
+import FileExplorer from '@/components/editor/FileExplorer';
 import { CodeEditor } from '@/components/editor/CodeEditor';
 import { PreviewPanel } from '@/components/editor/PreviewPanel';
 import { TerminalPanel } from '@/components/editor/TerminalPanel';

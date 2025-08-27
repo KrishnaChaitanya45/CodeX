@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Terminal } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
-const XTerminal = dynamic(() => import("../Terminal"), {ssr: false});
+const XTerminal = dynamic(() => import("./Terminal"), {ssr: false});
 interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
   message: string;

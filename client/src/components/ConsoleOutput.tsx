@@ -1,5 +1,4 @@
 import React, { FC, useState } from 'react';
-import Terminal from './Terminal';
 
 type ConsoleOutputProps = {
   logs: string[];
@@ -80,7 +79,21 @@ const ConsoleOutput: FC<ConsoleOutputProps> = ({ logs, errors, isVisible, onTogg
           </button>
         </div>
       </div>
-          <Terminal />
+      <div className="flex-1 overflow-y-auto p-2 font-mono text-sm">
+        {errors.map((error, i) => (
+          <div key={`error-${i}`} className="text-red-400 mb-1">
+            🔴 {error}
+          </div>
+        ))}
+        {logs.map((log, i) => (
+          <div key={`log-${i}`} className="text-gray-300 mb-1">
+            📋 {log}
+          </div>
+        ))}
+        {logs.length === 0 && errors.length === 0 && (
+          <div className="text-gray-500 italic">No output</div>
+        )}
+      </div>
     </div>
   );
 };

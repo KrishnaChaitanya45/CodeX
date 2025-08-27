@@ -33,7 +33,7 @@ async sleep (ms: number): Promise<void> {
 }
 
 async  checkIfAvailable(url: string): Promise<boolean> {
-  url = url.replace('ws://', 'http://').replace('wss://', 'https://');
+  url = url.replace('ws://', 'http://').replace('ws://', 'https://');
   const maxRetries = 4;
   const delays = [1000, 2000, 3000]; // Delay after 1st failure, and after 2nd failure
 
