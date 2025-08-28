@@ -5,7 +5,8 @@ metadata:
   namespace: devsarena
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:3000"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" 
+    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost:3000, https://staging.devsarena.in, https://devsarena.in"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS, HEAD"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range"
     # This annotation is needed for WebSocket connections to work properly
@@ -13,6 +14,10 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   ingressClassName: nginx
+  tls:
+  - hosts:
+    - '{{.LabID}}.quest.arenas.devsarena.in' 
+    secretName: '{{.LabID}}-tls-secret' 
   rules:
     - host: '{{.LabID}}.quest.arenas.devsarena.in'
       http:
