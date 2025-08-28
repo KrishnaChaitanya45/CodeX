@@ -3,14 +3,14 @@ import { NextResponse } from 'next/server'
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { language } = body || {};
+    const { language, labId } = body || {};
     if (!language) {
       return NextResponse.json({ error: 'language is required' }, { status: 400 });
     }
 
     const backend = process.env.BACKEND_API_URL || 'http://localhost:8080';
-    const labId = `test`
-    const url = `${backend}/v0/playground`;
+ 
+    const url = `${backend}/v1/start/quest`;
 
     // Proxy the request to backend. Backend will generate labId and return data.
     const res = await fetch(url, {
@@ -18,10 +18,8 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ language, labId })
     });
-
-    if (!res.ok) {
-      return NextResponse.json({ success:false, error: 'Failed to start lab' }, { status: res.status || 500 });
-    }
+    
+ 
 
     return NextResponse.json( {
       success:true,
