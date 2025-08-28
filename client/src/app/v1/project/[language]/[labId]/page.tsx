@@ -51,8 +51,7 @@ export default function V1ProjectPage() {
   const language = getParamString(params?.language) || 'html';
   const labId = getParamString(params?.labId) || 'test-lab'; // Use a default labId for testing
 
-  const FS_URL = `ws://${labId}.quest.arenas.devsarena.in/fs`;
-
+  
   // State management - ALL useState calls MUST be at the top
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [localFileContents, setLocalFileContents] = useState<{[key: string]: string}>({});
@@ -83,7 +82,7 @@ export default function V1ProjectPage() {
     createFile,
     deleteFile,
     renameFile,
-  } = useFileSystem(FS_URL, true, { language, labId }); // Always expect containers
+  } = useFileSystem(true, { language, labId }); // Always expect containers
   // filesystem hook may report that provisioning is needed via `provisionNeeded`
 
   // PTY readiness probe

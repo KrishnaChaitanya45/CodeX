@@ -15,6 +15,7 @@ import {
   ProjectParams,
   FS_INITIALIZE_CLIENT,
 } from "../constants/FS_MessageTypes";
+import { buildFsUrl } from "@/lib/fs";
 
 // Module-level cache to survive Fast Refresh / remounts.
 let globalQuestMetaCache: QuestMetaResponse | null = null;
@@ -56,7 +57,6 @@ const buildFileTree = (files: FileInfo[]) => {
 };
 
 export const useFileSystem = (
-  socketUrl: string,
   expectContainers: boolean = false,
   params: ProjectParams
 ) => {
@@ -73,7 +73,7 @@ export const useFileSystem = (
   const initialized = useRef(false);
   const isInitializing = useRef(false);
   const memoizedFileTree = useMemo(() => fileTree, [fileTree]);
-
+  const socketUrl = buildFsUrl(params.labId);
   // Helpers to operate on the nested fileTree structure (pure functions)
   const insertNodeAtPath = (tree: any, path: string, node: any) => {
     const newTree = JSON.parse(JSON.stringify(tree || {}));

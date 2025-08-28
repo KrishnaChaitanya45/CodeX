@@ -62,7 +62,7 @@ const LoadingUI = () => (
 export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, params }: PreviewPanelProps) {
   const iFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [appStatus, setAppStatus] = useState<'loading' | 'online' | 'offline'>('loading');
-  const appUrl = `http://${params.labId}.quest.arenas.devsarena.in/`;
+  const appUrl = window.location.protocol === 'https:' ? `https://${params.labId}.quest.arenas.devsarena.in/` : `http://${params.labId}.quest.arenas.devsarena.in/`;
 
   // We use useCallback to prevent this function from being recreated on every render
   const checkAppStatus = useCallback(async () => {
