@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
+	"lms_v0/internal/redis"
 	"lms_v0/k8s"
 	"lms_v0/utils"
 
@@ -19,6 +21,10 @@ type StartRequest struct {
 	LabID    string `json:"labId"`
 }
 
+var (
+	ALLOWED_CONCURRENT_LABS, _ = strconv.ParseUint(os.Getenv("ALLOWED_CONCURRENT_LABS"), 10, 64)
+)
+
 func jsonHeaders() map[string]string {
 	return map[string]string{
 		"Content-Type":                 "application/json",
@@ -29,6 +35,9 @@ func jsonHeaders() map[string]string {
 }
 func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	log.Printf("start-quest: handler invoked")
+	redis.InitRedis()
+	utils.InitRedisUtils(redis.RedisClient, redis.Context)
+
 	var payload StartRequest
 	if err := json.Unmarshal([]byte(req.Body), &payload); err != nil {
 		log.Printf("start-quest: invalid payload: %v", err)
@@ -46,20 +55,17 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 	}
 
 	params := k8s.SpinDownParams{
-		LabID:    payload.LabID,
-		Language: payload.Language,
-		AppName:  fmt.Sprintf("%s-%s", payload.Language, payload.LabID),
-
+		LabID:     payload.LabID,
+		Language:  payload.Language,
+		AppName:   fmt.Sprintf("%s-%s", payload.Language, payload.LabID),
 		Namespace: os.Getenv("K8S_NAMESPACE"),
 	}
 	if err := k8s.TearDownPodWithLanguage(params); err != nil {
 		log.Printf("start-quest: provisioning failed: %v", err)
-		return events.APIGatewayProxyResponse{StatusCode: 500, Body: fmt.Sprintf(`{"error":"Tearing Down failed: %s"}`, err.Error())}, nil
+		return events.APIGatewayProxyResponse{StatusCode: 500, Body: fmt.Sprintf(`{"error":"Deletion failed: %s"}`, err.Error())}, nil
 	}
 
-	utils.RedisUtilsInstance.RemoveLabInstance(payload.LabID)
-
-	resp := map[string]any{"success": true, "labId": payload.LabID, "message": "Removing Pods started"}
+	resp := map[string]any{"success": true, "labId": payload.LabID, "message": "Tearing down started"}
 	b, _ := json.Marshal(resp)
 	return events.APIGatewayProxyResponse{StatusCode: 200, Body: string(b)}, nil
 }
