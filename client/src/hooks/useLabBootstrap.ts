@@ -315,8 +315,10 @@ export function useLabBootstrap({
         };
         const closeHandler = (ev: CloseEvent) => {
           if (!metaLoadedRef.current && isMounted.current) {
-            setError({ code: 'fs_closed_before_meta', message: `FS closed (${ev.code}) before metadata loaded` });
-            setPhase('error');
+            // Suppress user-facing error; treat as a silent retry state
+            dlog(`FS closed (${ev.code}) before metadata loaded – retrying silently`);
+            setPhase('fs-connecting');
+        
           }
         };
         fsSocket.onOpen(reopenHandler);
@@ -544,6 +546,7 @@ export function useLabBootstrap({
     renameFile,
     loadDirectory,
   retryFetchMeta: fetchQuestMeta,
+  metaLoaded: metaLoadedRef.current,
     apiCalls: apiCalls.current
   };
 

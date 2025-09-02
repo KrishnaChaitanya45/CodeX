@@ -65,6 +65,8 @@ export default function V1ProjectPage() {
     { type: 'info', message: 'Welcome to DevArena Editor!', timestamp: new Date() },
   ]);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  // Set when LoadingScreen reports ready; allows us to hide it even if bootstrap says not fully ready yet
+  const [loadingDone, setLoadingDone] = useState(false);
   
 
   const savingFiles = useRef<Set<string>>(new Set());
@@ -377,14 +379,16 @@ export default function V1ProjectPage() {
     bootstrapPhase: bootstrap.phase
   });
   
-  if (!mergedIsReady) {
+  if (!loadingDone && !mergedIsReady) {
     return (
       <>
         <LoadingScreen
           language={language}
           labId={labId}
+          bootstrap={bootstrap}
           onReady={() => {
-            dlog('Loading screen complete, transitioning to IDE');
+            dlog('Loading screen complete, transitioning to IDE (setting loadingDone)');
+            setLoadingDone(true);
           }}
         />
   {bootstrap.fsReady && !bootstrapHasFiles && (
@@ -404,6 +408,8 @@ export default function V1ProjectPage() {
       </>
     );
   }
+
+  // Once loadingDone is true we proceed to render IDE regardless of mergedIsReady; placeholders will show until data fills.
 
   // Get current file content (prioritize local edits over server)
   const currentFileContent = activeFile ? getCurrentFileContent(activeFile) : '';
