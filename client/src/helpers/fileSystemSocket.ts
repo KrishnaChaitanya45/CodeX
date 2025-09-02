@@ -1,5 +1,6 @@
 
 import { WSResponse, FSMessageType, EventMessage } from '../constants/FS_MessageTypes';
+import { isDebug } from '@/utils/debug';
 
 class FileSystemSocket {
   private ws: WebSocket | null = null;
@@ -23,11 +24,14 @@ class FileSystemSocket {
   private connectionPromise: Promise<void> | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = Infinity;
+  private maxReconnectAttempts = 0; // disable auto reconnect temporarily for diagnosis
   private reconnectDelay = 300;
   private shouldReconnect = true;
   // Toggle detailed debug logging for handshake/correlation issues
   private debug = false;
+  private openHandlers: Array<() => void> = [];
+  private closeHandlers: Array<(ev: CloseEvent) => void> = [];
+  private heartbeatInterval: NodeJS.Timeout | null = null;
 
 async sleep (ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -35,28 +39,28 @@ async sleep (ms: number): Promise<void> {
 
 async  checkIfAvailable(url: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
-    console.log(`Checking WebSocket availability: ${url}`);
+  if (isDebug()) console.log(`Checking WebSocket availability: ${url}`);
 
     const testSocket = new WebSocket(url);
     const timeout = setTimeout(() => {
       testSocket.close();
-      console.log('WebSocket availability check timed out');
+  if (isDebug()) console.log('WebSocket availability check timed out');
       resolve(false); // Timeout means service might be starting up
     }, 3000);
 
     testSocket.onopen = () => {
       clearTimeout(timeout);
-      console.log('WebSocket service is available');
+  if (isDebug()) console.log('WebSocket service is available');
       testSocket.close();
       resolve(true);
     };
 
     testSocket.onerror = (error) => {
       clearTimeout(timeout);
-      console.error('WebSocket availability check failed:', error);
+  if (isDebug()) console.error('WebSocket availability check failed:', error);
 
       // For other errors, assume service is not available (404-like scenario)
-      console.log('WebSocket service not available (404-like error)');
+  if (isDebug()) console.log('WebSocket service not available (404-like error)');
       resolve(false);
     };
 
@@ -64,11 +68,11 @@ async  checkIfAvailable(url: string): Promise<boolean> {
       clearTimeout(timeout);
       if (event.code === 1000) {
         // Normal closure means service is available
-        console.log('WebSocket service available (normal closure)');
+  if (isDebug()) console.log('WebSocket service available (normal closure)');
         resolve(true);
       } else {
         // Abnormal closure - service might not be available
-        console.log(`WebSocket service not available (closed with code ${event.code})`);
+  if (isDebug()) console.log(`WebSocket service not available (closed with code ${event.code})`);
         resolve(false);
       }
     };
@@ -99,17 +103,23 @@ async  checkIfAvailable(url: string): Promise<boolean> {
 
         this.ws.onopen = () => {
           clearTimeout(timeout);
-          console.log("FS WebSocket connected");
+          if (isDebug()) console.log("FS WebSocket connected");
           this.isConnecting = false;
           this.reconnectAttempts = 0;
           this.shouldReconnect = true;
           this.connectionPromise = null;
+          // Start heartbeat to keep connection alive
+          this.startHeartbeat();
+          // fire open handlers
+          this.openHandlers.forEach(h => {
+            try { h(); } catch { /* swallow */ }
+          });
           resolve();
         };
 
         this.ws.onerror = (error) => {
           clearTimeout(timeout);
-          console.error("FS WebSocket error:", error);
+          if (isDebug()) console.error("FS WebSocket error:", error);
 
           this.isConnecting = false;
           this.connectionPromise = null;
@@ -120,26 +130,30 @@ async  checkIfAvailable(url: string): Promise<boolean> {
 
         this.ws.onclose = (event) => {
           clearTimeout(timeout);
-          console.log("FS WebSocket disconnected", event.code, event.reason);
+          if (isDebug()) console.log("FS WebSocket disconnected", event.code, event.reason);
           this.isConnecting = false;
           this.connectionPromise = null;
+          this.stopHeartbeat();
+          this.closeHandlers.forEach(h => {
+            try { h(event); } catch { /* swallow */ }
+          });
           
           // Auto-reconnect if not a normal closure, we should reconnect, and we haven't exceeded max attempts
           if (event.code !== 1000 && event.code !== 1001 && this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
-            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
+            if (isDebug()) console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
             
             setTimeout(() => {
               this.connect(url).catch((err) => {
-                console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, err);
+                if (isDebug()) console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, err);
                 if (this.reconnectAttempts >= this.maxReconnectAttempts && this.maxReconnectAttempts !== Infinity) {
-                  console.error("Max reconnection attempts exceeded. Connection failed permanently.");
+                  if (isDebug()) console.error("Max reconnection attempts exceeded. Connection failed permanently.");
                 }
               });
             }, delay);
           } else if (this.reconnectAttempts >= this.maxReconnectAttempts && this.maxReconnectAttempts !== Infinity) {
-            console.error("Max reconnection attempts exceeded. Connection failed permanently.");
+            if (isDebug()) console.error("Max reconnection attempts exceeded. Connection failed permanently.");
           }
         };
 
@@ -155,24 +169,26 @@ async  checkIfAvailable(url: string): Promise<boolean> {
 
   private handleMessage(event: MessageEvent) {
     try {
-      const response: WSResponse = JSON.parse(event.data);
-  if (this.debug) console.log("FS Message received:", response.type, response.status, "payload keys:", response.data ? Object.keys((response as any).data || {}) : []);
+  const response: WSResponse = JSON.parse(event.data);
+  if (isDebug() && this.debug) console.log("FS Message received:", response.type, response.status, "payload keys:", response.data ? Object.keys((response as any).data || {}) : []);
       
       const { request_id, type, data, status, message } = response;
 
       // Handle info messages from server (don't treat as errors)
       if (type === 'info') {
-        console.log("Server info:", message || data);
+        if (isDebug()) console.log("Server info:", message || data);
         return;
       }
 
       // Debug: show pending maps before attempting to match
       if (this.debug) {
-        console.log('DBG pendingByType:', JSON.stringify(Array.from(this.pendingByType.entries())));
-        console.log('DBG requestCallbacks keys:', Array.from(this.requestCallbacks.keys()));
+        if (isDebug()) {
+          console.log('DBG pendingByType:', JSON.stringify(Array.from(this.pendingByType.entries())));
+          console.log('DBG requestCallbacks keys:', Array.from(this.requestCallbacks.keys()));
+        }
       }
 
-      // If server provided request_id, use it
+  // If server provided request_id, use it
       if (request_id && this.requestCallbacks.has(request_id)) {
         const { resolve, reject } = this.requestCallbacks.get(request_id)!;
         this.requestCallbacks.delete(request_id);
@@ -193,13 +209,13 @@ async  checkIfAvailable(url: string): Promise<boolean> {
       }
 
     // If there's no request_id, attempt to match by type (FIFO) to support servers that omit request_id
-    if (!request_id && type && this.pendingByType.has(type)) {
+  if (!request_id && type && this.pendingByType.has(type)) {
         const list = this.pendingByType.get(type) || [];
         if (list.length > 0) {
           const oldestRequestId = list.shift()!; // remove from queue
           this.pendingByType.set(type, list);
           const cb = this.requestCallbacks.get(oldestRequestId);
-      if (this.debug) console.log('DBG matched by type', type, '->', oldestRequestId, 'cbExists=', !!cb);
+  if (isDebug() && this.debug) console.log('DBG matched by type', type, '->', oldestRequestId, 'cbExists=', !!cb);
           if (cb) {
             this.requestCallbacks.delete(oldestRequestId);
             this.requestIdToType.delete(oldestRequestId);
@@ -214,13 +230,13 @@ async  checkIfAvailable(url: string): Promise<boolean> {
       }
 
       // fall back to message handlers for unsolicited messages
-      if (type && this.messageHandlers.has(type)) {
+    if (type && this.messageHandlers.has(type)) {
         this.messageHandlers.get(type)!(data);
       } else {
-        console.log("Unhandled message type:", type);
+  if (isDebug()) console.log("Unhandled message type:", type, 'status=', status, 'hasRequestId=', !!request_id);
       }
     } catch (err) {
-      console.error("Error parsing WS message:", err);
+  if (isDebug()) console.error("Error parsing WS message:", err);
     }
   }
 
@@ -268,7 +284,7 @@ async  checkIfAvailable(url: string): Promise<boolean> {
 
       try {
         this.ws.send(JSON.stringify(message));
-        console.log("Sent message:", type, request_id);
+  if (isDebug()) console.log("Sent message:", type, request_id);
       } catch (error) {
         // cleanup on immediate send failure
         this.requestCallbacks.delete(request_id);
@@ -331,15 +347,43 @@ async  checkIfAvailable(url: string): Promise<boolean> {
       this.ws.close(1000, 'Normal closure');
       this.ws = null;
     }
+    this.stopHeartbeat();
     this.requestCallbacks.clear();
     this.messageHandlers.clear();
     this.connectionPromise = null;
     this.isConnecting = false;
   }
 
+  onOpen(cb: () => void) { this.openHandlers.push(cb); }
+  onClose(cb: (ev: CloseEvent) => void) { this.closeHandlers.push(cb); }
+  offOpen(cb: () => void) { this.openHandlers = this.openHandlers.filter(h => h !== cb); }
+  offClose(cb: (ev: CloseEvent) => void) { this.closeHandlers = this.closeHandlers.filter(h => h !== cb); }
+
+  private startHeartbeat() {
+    this.stopHeartbeat(); // ensure no duplicate
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' })); // simple ping
+        if (isDebug()) console.log('Sent heartbeat ping');
+      }
+    }, 20000); // every 20 seconds
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
+
+  // Expose current reconnect attempts (for diagnostics)
+  getReconnectAttempts(): number { return this.reconnectAttempts; }
+  // Allow external toggling of verbose debug inside socket (still gated by isDebug())
+  setVerboseDebug(v: boolean) { this.debug = v; }
 }
 
 export const fsSocket = new FileSystemSocket();

@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, Code, Play, CheckCircle, Loader2, Sparkles } from 'lucide-react';
+import { Terminal, Code, Play, CheckCircle, Loader2, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LoadingTips } from '../LoadingTips';
-import { useLabProgress } from '../../hooks/useLabProgress';
-import { useSimpleConnections } from '../../hooks/useSimpleConnections';
+import { useLabBootstrap } from '@/hooks/useLabBootstrap';
+import { dlog } from '@/utils/debug';
 
 interface LoadingScreenProps {
   language: string;
@@ -17,78 +17,50 @@ export function LoadingScreen({
   labId,
   onReady
 }: LoadingScreenProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isComplete, setIsComplete] = useState(false);
+  const bootstrap = useLabBootstrap({ labId, language, autoConnectPty: false });
 
-  // Use the lab progress hook first to get service status
-  const {
-    data: progressData,
-    loading: progressLoading,
-    status: labStatus,
-    fsActive,
-    ptyActive
-  } = useLabProgress({ labId, language });
-
-  // Use the simplified connections hook with service status
-  const {
-    fsConnected,
-    ptyConnected,
-    isReady
-  } = useSimpleConnections({
-    labId,
-    language,
-    fsActive,
-    ptyActive
-  });
-
-  // Define user-friendly loading steps
-  const loadingSteps = [
-    {
-      icon: <Terminal className="w-6 h-6" />,
-      title: "Setting up your workspace",
-      description: "Preparing your coding environment",
-      color: "text-blue-400"
-    },
-    {
-      icon: <Code className="w-6 h-6" />,
-      title: "Loading project files",
-      description: "Getting your code ready",
-      color: "text-purple-400"
-    },
-    {
-      icon: <Play className="w-6 h-6" />,
-      title: "Starting development server",
-      description: "Almost there...",
-      color: "text-green-400"
+  // Map bootstrap phases to UI steps (granular, includes metadata)
+  const phaseToStep = (phase: typeof bootstrap.phase): number => {
+    switch (phase) {
+      case 'checking-progress':
+      case 'starting-project':
+        return 0;
+      case 'waiting-active':
+      case 'fs-connecting':
+        return 1; // establishing service
+      case 'fs-meta-loading':
+        return 2; // fetching metadata
+      case 'ready':
+      case 'pty-connecting':
+      case 'full-ready':
+        return 3; // ready (files fetched)
+      default:
+        return 0;
     }
+  };
+
+  const loadingSteps = [
+    { icon: <Terminal className="w-6 h-6" />, title: 'Setting up workspace', description: 'Provisioning containers & services' },
+    { icon: <Loader2 className="w-6 h-6" />, title: 'Connecting to services', description: 'Opening file system channel' },
+    { icon: <Code className="w-6 h-6" />, title: 'Fetching project metadata', description: 'Listing files & directories' },
+    { icon: <Play className="w-6 h-6" />, title: 'Loading project files', description: 'Opening first file' }
   ];
 
-  // Update current step based on connection status
-  useEffect(() => {
-    if (fsConnected && ptyConnected) {
-      setCurrentStep(2);
-      setIsComplete(true);
-    } else if (fsConnected || ptyConnected) {
-      setCurrentStep(1);
-    } else if (fsActive || ptyActive) {
-      setCurrentStep(0);
-    }
-  }, [fsConnected, ptyConnected, fsActive, ptyActive]);
+  const currentStep = phaseToStep(bootstrap.phase);
+  const hasFiles = Object.keys(bootstrap.fileTree).length > 0;
+  const isComplete = bootstrap.fsReady && hasFiles;
+  const isError = bootstrap.phase === 'error' || (!!bootstrap.error && !hasFiles);
 
-  // Handle completion
   useEffect(() => {
-    if (isReady && isComplete) {
-      // Immediate transition when ready - no artificial delay
+    if (isComplete) {
+      dlog('LoadingScreen: environment ready, invoking onReady');
       onReady?.();
     }
-  }, [isReady, isComplete, onReady]);
+  }, [isComplete, onReady]);
 
   const getProgressPercentage = () => {
     if (isComplete) return 100;
-    if (currentStep === 2) return 90;
-    if (currentStep === 1) return 60;
-    if (currentStep === 0) return 30;
-    return 10;
+    return bootstrap.percent; // reuse heuristic from hook
   };
 
   return (
@@ -114,12 +86,12 @@ export function LoadingScreen({
             Preparing Your Environment
           </h1>
           <p className="text-gray-400 text-lg">
-            {isComplete ? "Ready to code!" : "Setting everything up for you..."}
+            {isComplete ? 'Ready to code!' : isError ? 'We hit a snag establishing the workspace.' : 'Setting everything up for you...'}
           </p>
         </motion.div>
 
         {/* Progress Bar */}
-        <motion.div
+  {!isError && <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
@@ -139,17 +111,17 @@ export function LoadingScreen({
               <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
             </motion.div>
           </div>
-        </motion.div>
+  </motion.div>}
 
         {/* Loading Steps */}
-        <motion.div
+  {!isError && <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="space-y-4 mb-8"
         >
           {loadingSteps.map((step, index) => {
-            const isActive = index === currentStep;
+            const isActive = index === currentStep && !isComplete;
             const isCompleted = index < currentStep || (index === currentStep && isComplete);
 
             return (
@@ -173,13 +145,7 @@ export function LoadingScreen({
                     ? 'bg-green-500/20 text-green-400'
                     : 'bg-gray-600/20 text-gray-500'
                 }`}>
-                  {isCompleted ? (
-                    <CheckCircle className="w-6 h-6" />
-                  ) : isActive ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    step.icon
-                  )}
+                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : isActive ? <Loader2 className="w-6 h-6 animate-spin" /> : step.icon}
                 </div>
                 <div className="flex-grow">
                   <h3 className={`font-semibold transition-colors duration-300 ${
@@ -204,7 +170,25 @@ export function LoadingScreen({
               </motion.div>
             );
           })}
-        </motion.div>
+        </motion.div>}
+
+        {isError && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} className="mb-10 p-6 rounded-xl bg-red-900/20 border border-red-700/40 text-red-300 space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+              <h2 className="font-semibold text-lg">Connection Issue</h2>
+            </div>
+            <p className="text-sm leading-relaxed">
+              {bootstrap.error?.message || 'File system connection closed before project files loaded.'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium transition"
+            >
+              <RefreshCw className="w-4 h-4" /> Retry
+            </button>
+          </motion.div>
+        )}
 
         {/* Completion Animation */}
         <AnimatePresence>
@@ -228,7 +212,7 @@ export function LoadingScreen({
         </AnimatePresence>
 
         {/* Language Badge */}
-        <motion.div
+  {!isError && <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
@@ -238,10 +222,10 @@ export function LoadingScreen({
             <Code className="w-4 h-4" />
             <span>{language.charAt(0).toUpperCase() + language.slice(1)} Environment</span>
           </div>
-        </motion.div>
+  </motion.div>}
 
         {/* Helpful Tips */}
-        <motion.div
+  {!isError && <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
@@ -251,7 +235,7 @@ export function LoadingScreen({
             getTips={() => []} // Will use default tips
             className="mt-6"
           />
-        </motion.div>
+  </motion.div>}
       </div>
     </div>
   );

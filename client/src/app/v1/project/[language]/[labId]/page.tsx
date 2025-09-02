@@ -11,12 +11,12 @@ import { PreviewPanel } from '@/components/editor/PreviewPanel';
 import { TerminalPanel } from '@/components/editor/TerminalPanel';
 import ProgressIndicator from '@/components/editor/ProgressIndicator';
 import { LoadingScreen } from '@/components/editor/LoadingScreen';
+import { useLabBootstrap } from '@/hooks/useLabBootstrap';
 
 // Hooks
-import { useFileSystem } from '@/hooks/useV1Lab';
-import { useLabProgress } from '@/hooks/useLabProgress';
-import { useSimpleConnections } from '@/hooks/useSimpleConnections';
+// Legacy hooks removed – migrated to unified bootstrap
 import { PLAYGROUND_OPTIONS } from '@/constants/playground';
+import { dlog } from '@/utils/debug';
 
 
 // Mock progress data
@@ -52,15 +52,8 @@ export default function V1ProjectPage() {
   const language = getParamString(params?.language) || 'html';
   const labId = getParamString(params?.labId) || 'test-lab';
 
-  // ALL HOOKS MUST BE CALLED AT THE TOP, BEFORE ANY CONDITIONAL RETURNS
-  // Use the simplified progress and connection hooks
-  const { data: progressData, loading: progressLoading, progressLogs, fsActive, ptyActive, status, apiCallCount } = useLabProgress({ labId, language });
-  const { fsConnected, ptyConnected, fsError, ptyError, isReady } = useSimpleConnections({ 
-    labId, 
-    language, 
-    fsActive, 
-    ptyActive 
-  });
+  // Unified bootstrap hook (single path)
+  const bootstrap = useLabBootstrap({ labId, language, autoConnectPty: false });
 
   // State management - ALL useState calls MUST be at the top
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -73,115 +66,55 @@ export default function V1ProjectPage() {
   ]);
   const [saveToast, setSaveToast] = useState<string | null>(null);
   
-  // Refs for tracking state - ALL useRef calls MUST be at the top
+
   const savingFiles = useRef<Set<string>>(new Set());
 
-  // File system WebSocket hook - ALWAYS call the hook, just conditionally use the connection
-  const {
-    isConnected,
-    connectionError,
-    fileTree,
-    fileContents: serverFileContents,
-    loading,
-    error: fsFileError,
-    loadDirectory,
-    loadFileContent,
-    saveFile,
-    createFile,
-    deleteFile,
-    renameFile,
-  } = useFileSystem(true, { language, labId }); // Always enable, but connection logic handled inside
-
-  // ALL useEffect and useCallback hooks MUST be before any conditional returns
-  
-  // Stop polling when IDE is ready to avoid unnecessary API calls
-  useEffect(() => {
-    if (isReady) {
-      // The polling will continue in the background, but that's fine
-      // The user now has the IDE to interact with immediately
-      console.log('IDE is ready - user can now interact with the interface');
-    }
-  }, [isReady]);
-
-  // Initialize connection status logging
-  useEffect(() => {
-    if (fsConnected && ptyConnected) {
-      setConsoleLogs(prev => [...prev, {
-        type: 'success',
-        message: 'Connected to all services - IDE ready!',
-        timestamp: new Date()
-      }]);
-    } else if (fsError || ptyError) {
-      setConsoleLogs(prev => [...prev, {
-        type: 'warning',
-        message: `Connection issues: ${fsError || ptyError}`,
-        timestamp: new Date()
-      }]);
-    }
-  }, [fsConnected, ptyConnected, fsError, ptyError]);
+  const bootstrapHasFiles = Object.keys(bootstrap.fileTree).length > 0;
+  const mergedIsReady = bootstrap.fsReady && bootstrapHasFiles;
+  const mergedFsConnected = bootstrap.fsReady;
+  const mergedPtyConnected = bootstrap.ptyReady;
+  const mergedFsError = bootstrap.error?.code === 'fs_connect_failed' ? bootstrap.error.message : null;
+  const mergedPtyError = bootstrap.error?.code === 'pty_connect_failed' ? bootstrap.error.message : null;
 
   useEffect(() => {
-    if (isConnected && Object.keys(fileTree).length > 0 && !activeFile) {
-      // Find the first file (not directory) in the file tree
-      const findMainFile = (tree: any): string | null => {
-        const mainFileName = PLAYGROUND_OPTIONS.find(opt => opt.language === language)?.mainFile;
-        if (!mainFileName) return null;
+    if (mergedIsReady) dlog('IDE is ready - user can now interact with the interface');
+  }, [mergedIsReady]);
 
-        const recurse = (nodeTree: any): string | null => {
-          for (const [name, node] of Object.entries(nodeTree)) {
-            if (!node || typeof node !== 'object') continue;
-            const typed = node as any;
-            const path = typed.path ?? name;
-            const nodeName = typed.name ?? name;
-
-            // match by explicit name or by path suffix
-            if (!typed.isDir && (nodeName === mainFileName || path.endsWith(`/${mainFileName}`) || name === mainFileName)) {
-              return path;
-            }
-
-            if (typed.children) {
-              const found = recurse(typed.children);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-
-        return recurse(tree);
-      };
-      
-      const defaultMainFile = findMainFile(fileTree);
-      if (defaultMainFile) {
-        setActiveFile(defaultMainFile);
-
-        // Load the first file's content so the editor isn't blank
-        (async () => {
-          try {
-            if (serverFileContents[defaultMainFile] === undefined) {
-              await loadFileContent(defaultMainFile);
-            }
-          } catch (err) {
-            setConsoleLogs(prev => [...prev, {
-              type: 'error',
-              message: `Failed to preload ${defaultMainFile}: ${err}`,
-              timestamp: new Date()
-            }]);
-          }
-        })();
-      }
+  useEffect(() => {
+    if (mergedFsConnected) {
+      setConsoleLogs(prev => [...prev, { type: 'success', message: 'Connected to services - IDE ready!', timestamp: new Date() }]);
+    } else if (mergedFsError || mergedPtyError) {
+      setConsoleLogs(prev => [...prev, { type: 'warning', message: `Connection issues: ${mergedFsError || mergedPtyError}`, timestamp: new Date() }]);
     }
-  }, [isConnected, fileTree, activeFile, serverFileContents, loadFileContent]);
+  }, [mergedFsConnected, mergedPtyConnected, mergedFsError, mergedPtyError]);
+
+  const effectiveFileTree = bootstrap.fileTree;
+  const effectiveFileContents = bootstrap.fileContents;
+  const effectiveLoadFileContent = bootstrap.openFile;
+  const effectiveLoadDirectory = bootstrap.loadDirectory;
+  const effectiveSaveFile = bootstrap.saveFile;
+  const effectiveCreateFile = bootstrap.createFile;
+  const effectiveDeleteFile = bootstrap.deleteFile;
+  const effectiveRenameFile = bootstrap.renameFile;
+  const effectiveIsConnected = mergedFsConnected;
+
+  // When bootstrap chooses an initial file, sync it locally
+  useEffect(() => {
+    if (bootstrap.activeFile && !activeFile) {
+      setActiveFile(bootstrap.activeFile);
+    }
+  }, [bootstrap.activeFile, activeFile]);
 
   // Get current file content (prioritize local edits over server)
   const getCurrentFileContent = useCallback((filePath: string): string => {
     if (localFileContents[filePath] !== undefined) {
       return localFileContents[filePath];
     }
-    if (serverFileContents[filePath] !== undefined) {
-      return serverFileContents[filePath];
+    if (effectiveFileContents[filePath] !== undefined) {
+      return effectiveFileContents[filePath];
     }
     return '';
-  }, [localFileContents, serverFileContents]);
+  }, [localFileContents, effectiveFileContents]);
 
   // Handle file selection
   const handleFileSelect = useCallback(async (path: string) => {
@@ -191,14 +124,13 @@ export default function V1ProjectPage() {
     
     try {
       // Load file content from server if not already loaded
-      if (serverFileContents[path] === undefined) {
+      if (effectiveFileContents[path] === undefined) {
         setConsoleLogs(prev => [...prev, {
           type: 'info',
           message: `Loading ${path}...`,
           timestamp: new Date()
         }]);
-        
-        await loadFileContent(path);
+        await effectiveLoadFileContent(path);
         
         setConsoleLogs(prev => [...prev, {
           type: 'success',
@@ -213,7 +145,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
     }
-  }, [activeFile, serverFileContents, loadFileContent]);
+  }, [activeFile, effectiveFileContents, effectiveLoadFileContent]);
 
   // Handle directory toggle
   const handleDirectoryToggle = useCallback(async (path: string) => {
@@ -231,7 +163,7 @@ export default function V1ProjectPage() {
           timestamp: new Date()
         }]);
         
-        await loadDirectory(path);
+  await effectiveLoadDirectory(path);
         
         setConsoleLogs(prev => [...prev, {
           type: 'success',
@@ -247,7 +179,7 @@ export default function V1ProjectPage() {
       }
     }
     setExpandedDirs(newExpanded);
-  }, [expandedDirs, loadDirectory]);
+  }, [expandedDirs, effectiveLoadDirectory]);
 
   // Handle code changes
   const handleCodeChange = useCallback((value: string) => {
@@ -286,7 +218,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
 
-      await saveFile(activeFile, content);
+  await effectiveSaveFile(activeFile, content);
 
       setConsoleLogs(prev => [...prev, {
         type: 'success',
@@ -308,7 +240,7 @@ export default function V1ProjectPage() {
     } finally {
       savingFiles.current.delete(activeFile);
     }
-  }, [activeFile, getCurrentFileContent, saveFile]);
+  }, [activeFile, getCurrentFileContent, effectiveSaveFile]);
 
   // Handle file creation
   const handleFileCreate = useCallback(async (path: string, isDirectory: boolean) => {
@@ -319,7 +251,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
       
-      await createFile(path, isDirectory, isDirectory ? undefined : '');
+  await effectiveCreateFile(path, isDirectory, isDirectory ? undefined : '');
       
       setConsoleLogs(prev => [...prev, {
         type: 'success',
@@ -333,7 +265,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
     }
-  }, [createFile]);
+  }, [effectiveCreateFile]);
 
   // Handle file deletion
   const handleFileDelete = useCallback(async (path: string) => {
@@ -344,7 +276,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
       
-      await deleteFile(path);
+  await effectiveDeleteFile(path);
       
       setConsoleLogs(prev => [...prev, {
         type: 'success',
@@ -363,7 +295,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
     }
-  }, [deleteFile, activeFile]);
+  }, [effectiveDeleteFile, activeFile]);
 
   // Handle file rename
   const handleFileRename = useCallback(async (oldPath: string, newPath: string) => {
@@ -374,7 +306,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
       
-      await renameFile(oldPath, newPath);
+  await effectiveRenameFile(oldPath, newPath);
       
       setConsoleLogs(prev => [...prev, {
         type: 'success',
@@ -393,7 +325,7 @@ export default function V1ProjectPage() {
         timestamp: new Date()
       }]);
     }
-  }, [renameFile, activeFile]);
+  }, [effectiveRenameFile, activeFile]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -436,25 +368,40 @@ export default function V1ProjectPage() {
   // NOW WE CAN HAVE CONDITIONAL RETURNS - ALL HOOKS ARE ABOVE THIS LINE
 
   // Show loading screen until connections are established AND file tree is loaded
-  console.log('Main page debug:', {
-    isReady,
-    fileTreeKeys: Object.keys(fileTree),
-    fileTreeLength: Object.keys(fileTree).length,
-    loading,
-    fsConnected,
-    ptyConnected
+  dlog('Main page debug:', {
+    isReady: mergedIsReady,
+    fileTreeKeys: Object.keys(effectiveFileTree),
+    fileTreeLength: Object.keys(effectiveFileTree).length,
+    fsConnected: mergedFsConnected,
+    ptyConnected: mergedPtyConnected,
+    bootstrapPhase: bootstrap.phase
   });
   
-  if (!isReady || loading || Object.keys(fileTree).length === 0) {
+  if (!mergedIsReady) {
     return (
-      <LoadingScreen
-        language={language}
-        labId={labId}
-        onReady={() => {
-          // IDE will load immediately when connections are established
-          console.log('Loading screen complete, transitioning to IDE');
-        }}
-      />
+      <>
+        <LoadingScreen
+          language={language}
+          labId={labId}
+          onReady={() => {
+            dlog('Loading screen complete, transitioning to IDE');
+          }}
+        />
+  {bootstrap.fsReady && !bootstrapHasFiles && (
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 mx-auto w-full text-center pointer-events-none">
+            <div className="inline-block bg-gray-800/80 border border-gray-700 rounded p-4 pointer-events-auto">
+              <div className="text-xs text-gray-300 flex flex-col gap-2 items-center">
+                <span>Connected to workspace but file list is still empty.</span>
+                {bootstrap.error && <span className="text-red-400">{bootstrap.error.message}</span>}
+                <button
+                  onClick={() => bootstrap.retryFetchMeta()}
+                  className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-xs"
+                >Retry Loading Files</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -475,18 +422,24 @@ export default function V1ProjectPage() {
       <PanelGroup direction="horizontal">
         {/* File Explorer Panel */}
         <Panel defaultSize={20} minSize={15} maxSize={30}>
-          <FileExplorer
-            fileTree={fileTree}
-            activeFile={activeFile}
-            dirtyFiles={dirtyFiles}
-            expandedDirs={expandedDirs}
-            onFileSelect={handleFileSelect}
-            onDirectoryToggle={handleDirectoryToggle}
-            onFileCreate={handleFileCreate}
-            onFileDelete={handleFileDelete}
-            onFileRename={handleFileRename}
-            isLoading={isConnected && Object.keys(fileTree).length === 0}
-          />
+      {Object.keys(effectiveFileTree).length === 0 ? (
+            <div className="h-full w-full flex items-center justify-center text-gray-400 text-xs px-2 text-center">
+  {'Still fetching project files...'}
+            </div>
+          ) : (
+            <FileExplorer
+              fileTree={effectiveFileTree}
+              activeFile={activeFile}
+              dirtyFiles={dirtyFiles}
+              expandedDirs={expandedDirs}
+              onFileSelect={handleFileSelect}
+              onDirectoryToggle={handleDirectoryToggle}
+              onFileCreate={handleFileCreate}
+              onFileDelete={handleFileDelete}
+              onFileRename={handleFileRename}
+              isLoading={false}
+            />
+          )}
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-primary-600/30 hover:bg-primary-600/50 transition-colors" />
