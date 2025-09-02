@@ -24,7 +24,7 @@ class FileSystemSocket {
   private connectionPromise: Promise<void> | null = null;
   private isConnecting = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 0; // disable auto reconnect temporarily for diagnosis
+  private maxReconnectAttempts = 30;
   private reconnectDelay = 300;
   private shouldReconnect = true;
   // Toggle detailed debug logging for handshake/correlation issues
