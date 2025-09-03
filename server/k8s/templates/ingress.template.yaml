@@ -41,7 +41,6 @@ spec:
                 name: '{{.LabID}}-service'
                 port:
                   name: pty-ws
-          # Route for the Vite dev server on port 5173 (default route)
           - path: /
             pathType: Prefix
             backend:
@@ -49,3 +48,40 @@ spec:
                 name: '{{.LabID}}-service'
                 port:
                   name: app-vite-dev
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: '{{.LabID}}-ssl-progress-job'
+  namespace: devsarena
+spec:
+  template:
+    spec:
+      containers:
+      - name: check-and-update
+        image: alpine:latest
+        env:
+          - name: REDIS_URI
+            valueFrom:
+              secretKeyRef:
+                name: aws-secrets
+                key: REDIS_URI
+        command:
+        - sh
+        - -c
+        - |
+          apk add --no-cache curl redis jq kubectl
+          HOST="{{.LabID}}.quest.arenas.devsarena.in"
+          while true; do
+            if kubectl get secret {{.LabID}}-tls-secret -n devsarena >/dev/null 2>&1 && curl --max-time 5 --silent --head https://$HOST >/dev/null 2>&1; then
+              TIMESTAMP=$(date +%s)
+              CURRENT=$(redis-cli -u $REDIS_URI HGET lab_instances {{.LabID}})
+              if [ -n "$CURRENT" ]; then
+                UPDATED=$(echo "$CURRENT" | jq --arg ts "$TIMESTAMP" '.ProgressLogs += [{"ServiceName": "ssl", "Status": "active", "Timestamp": ($ts | tonumber), "Message": "SSL active"}]')
+                redis-cli -u $REDIS_URI HSET lab_instances {{.LabID}} "$UPDATED"
+              fi
+              exit 0
+            fi
+            sleep 10
+          done
+      restartPolicy: OnFailure
