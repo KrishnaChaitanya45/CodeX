@@ -10,12 +10,15 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
+
+var sslStartTime time.Time
 
 // SpinUpParams holds all the variables needed for the templates.
 type SpinUpParams struct {
@@ -60,6 +63,9 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 	}
 	if err := CreateIngressFromYamlIfDoesNotExists(params); err != nil {
 		return fmt.Errorf("could not create ingress: %w", err)
+	}
+	if err := CreateSSLProgressJobFromYamlIfDoesNotExists(params); err != nil {
+		return fmt.Errorf("could not create SSL progress job: %w", err)
 	}
 
 	log.Printf("Successfully spun up all resources for LabID: %s", params.LabID)
@@ -229,10 +235,12 @@ func CreateIngressFromYamlIfDoesNotExists(params SpinUpParams) error {
 	}
 
 	log.Printf("Creating ingress '%s'", ingress.Name)
+	sslStartTime = time.Now()
 	_, err = ClientSet.NetworkingV1().Ingresses(params.Namespace).Create(context.TODO(), &ingress, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
+	log.Printf("[SSL TIMING] Ingress '%s' created at %s (SSL process starts)", ingress.Name, sslStartTime.Format(time.RFC3339))
 
 	// Update progress for ingress creation
 	progress := utils.LabProgressEntry{
@@ -243,15 +251,50 @@ func CreateIngressFromYamlIfDoesNotExists(params SpinUpParams) error {
 	}
 	utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, progress)
 
-	// Update progress for SSL certificate request
-	sslProgress := utils.LabProgressEntry{
-		Timestamp:   time.Now().Unix(),
-		Status:      utils.Booting,
-		Message:     "SSL certificate requested via Let's Encrypt",
-		ServiceName: utils.SSL_SERVICE,
-	}
-	utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, sslProgress)
 	return err
+}
+
+func CreateSSLProgressJobFromYamlIfDoesNotExists(params SpinUpParams) error {
+	yamlFilePath := "k8s/templates/ssl-progress-job.template.yaml"
+	jobName := fmt.Sprintf("%s-ssl-progress-job", params.LabID)
+
+	_, err := ClientSet.BatchV1().Jobs(params.Namespace).Get(context.TODO(), jobName, metav1.GetOptions{})
+	if err == nil {
+		log.Printf("Job '%s' already exists, skipping.", jobName)
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	var processedYaml bytes.Buffer
+	tmpl, err := template.ParseFiles(yamlFilePath)
+	if err != nil {
+		return err
+	}
+	if err := tmpl.Execute(&processedYaml, params); err != nil {
+		return err
+	}
+
+	var job batchv1.Job
+	if err := yaml.Unmarshal(processedYaml.Bytes(), &job); err != nil {
+		return fmt.Errorf("error unmarshalling job YAML: %w", err)
+	}
+
+	log.Printf("Creating job '%s'", job.Name)
+	jobCreateStart := time.Now()
+	_, err = ClientSet.BatchV1().Jobs(params.Namespace).Create(context.TODO(), &job, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Printf("[SSL TIMING] SSL progress job '%s' created in %v", job.Name, time.Since(jobCreateStart))
+
+	log.Printf("SSL progress job '%s' created successfully", job.Name)
+
+	// Don't wait for job completion - progress monitoring is now async
+	log.Printf("SSL progress monitoring started asynchronously for LabID: %s", params.LabID)
+
+	return nil
 }
 
 // TearDownPodWithLanguage removes the resources created for a lab.

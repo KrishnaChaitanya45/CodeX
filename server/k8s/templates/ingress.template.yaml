@@ -5,9 +5,8 @@ metadata:
   namespace: devsarena
   annotations:
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod" 
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://devsarena.in,https://staging.devsarena.in,http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://devsarena.in,https://staging.devsarena.in,https://staging2.devsarena.in,http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS, HEAD"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range"
     # This annotation is needed for WebSocket connections to work properly
@@ -18,12 +17,8 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "30"
 spec:
   ingressClassName: nginx
-  tls:
-  - hosts:
-    - '{{.LabID}}.quest.arenas.devsarena.in' 
-    secretName: '{{.LabID}}-tls-secret' 
   rules:
-    - host: '{{.LabID}}.quest.arenas.devsarena.in'
+    - host: '{{.LabID}}.devsarena.in'
       http:
         paths:
           # WebSocket routes for runner service (must come first to avoid conflicts)
@@ -41,7 +36,6 @@ spec:
                 name: '{{.LabID}}-service'
                 port:
                   name: pty-ws
-          # Route for the Vite dev server on port 5173 (default route)
           - path: /
             pathType: Prefix
             backend:
