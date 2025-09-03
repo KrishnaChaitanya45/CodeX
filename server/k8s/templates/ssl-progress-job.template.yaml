@@ -9,18 +9,72 @@ spec:
       containers:
       - name: check-and-update
         image: alpine:latest
+        env:
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: REDIS_URI
         command:
         - sh
         - -c
         - |
-          apk add --no-cache curl
+          apk add --no-cache curl redis jq
           HOST="{{.LabID}}.devsarena.in"
+          LAB_ID="{{.LabID}}"
           echo "$(date): Starting SSL progress check for $HOST"
+          
           while true; do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://$HOST --max-time 10)
             echo "$(date): HTTP response code: $HTTP_CODE"
             if echo "$HTTP_CODE" | grep -q "^\(200\|502\)$"; then
-              echo "$(date): Host reachable, exiting"
+              echo "$(date): Host reachable, updating Redis progress"
+              
+              # Get current timestamp
+              TIMESTAMP=$(date +%s)
+              
+              # Get current lab instance
+              CURRENT_INSTANCE=$(redis-cli -u $REDIS_URL HGET "lab_instances" "$LAB_ID")
+              
+              if [ -z "$CURRENT_INSTANCE" ]; then
+                echo "$(date): Lab instance not found in Redis"
+                exit 1
+              fi
+              
+              # Create new progress entry
+              NEW_PROGRESS='{"Timestamp":'$TIMESTAMP',"Status":"active","Message":"SSL certificate active and host reachable","ServiceName":"ssl"}'
+              echo "$(date): New progress entry: $NEW_PROGRESS"
+              
+              # Update the instance using jq
+              UPDATED_INSTANCE=$(echo "$CURRENT_INSTANCE" | jq \
+                --argjson newProgress "$NEW_PROGRESS" \
+                '.ProgressLogs += [$newProgress] | .Status = "active" | .LastUpdatedAt = '$TIMESTAMP)
+              
+              # Check if both runner and pty services are active
+              RUNNER_ACTIVE=$(echo "$UPDATED_INSTANCE" | jq '.ProgressLogs | any(.ServiceName == "file_system" and .Status == "active")')
+              PTY_ACTIVE=$(echo "$UPDATED_INSTANCE" | jq '.ProgressLogs | any(.ServiceName == "pty" and .Status == "active")')
+              LAB_STATUS=$(echo "$UPDATED_INSTANCE" | jq -r '.Status')
+              
+              echo "$(date): Runner active check: $RUNNER_ACTIVE"
+              echo "$(date): PTY active check: $PTY_ACTIVE"
+              echo "$(date): Lab status: $LAB_STATUS"
+              
+              # Save back to Redis
+              redis-cli -u $REDIS_URL HSET "lab_instances" "$LAB_ID" "$UPDATED_INSTANCE"
+              
+              # If both services are active and status is active, add to monitoring queue
+              if [ "$RUNNER_ACTIVE" = "true" ] && [ "$PTY_ACTIVE" = "true" ]; then
+                echo "$(date): Both runner and PTY are active, adding to monitoring queue"
+                CREATED_AT=$(echo "$UPDATED_INSTANCE" | jq '.CreatedAt')
+                MONITORING_ENTRY='{"labID":"'$LAB_ID'","status":"active","lastUpdatedAt":'$TIMESTAMP',"createdAt":'$CREATED_AT'}'
+                echo "$(date): Monitoring entry: $MONITORING_ENTRY"
+                redis-cli -u $REDIS_URL LPUSH "labs_monitor" "$MONITORING_ENTRY"
+                echo "$(date): Lab $LAB_ID added to monitoring queue"
+              else
+                echo "$(date): Not adding to monitoring queue - Runner: $RUNNER_ACTIVE, PTY: $PTY_ACTIVE"
+              fi
+              
+              echo "$(date): Redis progress updated successfully"
               exit 0
             fi
             sleep 5

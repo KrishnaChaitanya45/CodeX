@@ -99,23 +99,8 @@ func UpdateLabInstanceProgress(labID string, progress LabProgressEntry) {
 
 	// Update progress logs and status
 	instance.ProgressLogs = append(instance.ProgressLogs, progress)
-	instance.Status = progress.Status
 	instance.LastUpdatedAt = progress.Timestamp
 
-	// Check if both runner and pty services are active
-	runnerActive := false
-	ptyActive := false
-
-	for _, logEntry := range instance.ProgressLogs {
-		if logEntry.ServiceName == FILE_SYSTEM_SERVICE && logEntry.Status == Active {
-			runnerActive = true
-		}
-		if logEntry.ServiceName == PTY_SERVICE && logEntry.Status == Active {
-			ptyActive = true
-		}
-	}
-
-	// Save updated instance
 	updatedData, err := json.Marshal(instance)
 	if err != nil {
 		log.Printf("Failed to marshal lab instance: %v", err)
@@ -126,31 +111,6 @@ func UpdateLabInstanceProgress(labID string, progress LabProgressEntry) {
 	if err != nil {
 		log.Printf("Failed to update lab instance %s: %v", labID, err)
 		return
-	}
-
-	// If both services are active, add to monitoring queue
-	if runnerActive && ptyActive {
-		monitoringEntry := LabMonitoringEntry{
-			LabID:         instance.LabID,
-			Status:        Booting,
-			LastUpdatedAt: instance.LastUpdatedAt,
-			CreatedAt:     instance.CreatedAt,
-		}
-
-		monitoringData, err := json.Marshal(monitoringEntry)
-		if err != nil {
-			log.Printf("Failed to marshal monitoring entry: %v", err)
-		} else {
-			// Remove init message if it exists
-			RedisClient.LRem(Context, "labs_monitor", 0, "init")
-
-			err = RedisClient.LPush(Context, "labs_monitor", monitoringData).Err()
-			if err != nil {
-				log.Printf("Failed to push lab %s to monitoring queue: %v", labID, err)
-			} else {
-				log.Printf("Lab %s added to monitoring queue - both services are active", labID)
-			}
-		}
 	}
 
 	log.Printf("Lab instance %s progress updated", labID)

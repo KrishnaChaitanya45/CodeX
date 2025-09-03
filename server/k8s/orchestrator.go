@@ -58,9 +58,6 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 	if err := CreateDeploymentFromYamlIfDoesNotExists(params); err != nil {
 		return fmt.Errorf("could not create deployment: %w", err)
 	}
-	if err := WaitForDeploymentReady(params); err != nil {
-		return fmt.Errorf("deployment not ready: %w", err)
-	}
 	if err := CreateServiceFromYamlIfDoesNotExists(params); err != nil {
 		return fmt.Errorf("could not create service: %w", err)
 	}
@@ -164,31 +161,6 @@ func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpParams) error {
 	}
 	utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, progress)
 	return err
-}
-
-func WaitForDeploymentReady(params SpinUpParams) error {
-	deploymentName := fmt.Sprintf("%s-deployment", params.LabID)
-	log.Printf("[TIMING] Waiting for deployment '%s' to be ready", deploymentName)
-	waitStart := time.Now()
-	for {
-		deployment, err := ClientSet.AppsV1().Deployments(params.Namespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("error getting deployment: %w", err)
-		}
-		if deployment.Status.ReadyReplicas == *deployment.Spec.Replicas {
-			waitTime := time.Since(waitStart)
-			log.Printf("[TIMING] Deployment '%s' ready in %v", deploymentName, waitTime)
-			progress := utils.LabProgressEntry{
-				Timestamp:   time.Now().Unix(),
-				Status:      utils.Booting,
-				Message:     fmt.Sprintf("Deployment '%s' ready", deploymentName),
-				ServiceName: utils.SERVER_SERVICE,
-			}
-			utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, progress)
-			return nil
-		}
-		time.Sleep(5 * time.Second)
-	}
 }
 
 func CreateServiceFromYamlIfDoesNotExists(params SpinUpParams) error {
@@ -319,45 +291,8 @@ func CreateSSLProgressJobFromYamlIfDoesNotExists(params SpinUpParams) error {
 
 	log.Printf("SSL progress job '%s' created successfully", job.Name)
 
-	// Wait for the job to complete
-	jobKey := fmt.Sprintf("%s-ssl-progress-job", params.LabID)
-	log.Printf("[SSL TIMING] Starting to wait for SSL job '%s' completion at %s", jobKey, time.Now().Format(time.RFC3339))
-	for {
-		jobStatus, err := ClientSet.BatchV1().Jobs(params.Namespace).Get(context.TODO(), jobKey, metav1.GetOptions{})
-		if err != nil {
-			log.Printf("Error getting job status: %v", err)
-			break
-		}
-		if jobStatus.Status.Succeeded > 0 {
-			sslTotalTime := time.Since(sslStartTime)
-			log.Printf("[SSL TIMING] SSL job '%s' completed successfully in %v (total SSL time: %v)", jobKey, time.Since(jobCreateStart), sslTotalTime)
-			// Job succeeded, update progress
-			sslProgress := utils.LabProgressEntry{
-				Timestamp:   time.Now().Unix(),
-				Status:      utils.Active,
-				Message:     "SSL certificate active and host reachable",
-				ServiceName: utils.SSL_SERVICE,
-			}
-			utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, sslProgress)
-			log.Printf("SSL progress updated successfully for LabID: %s", params.LabID)
-			break
-		}
-		if jobStatus.Status.Failed > 0 {
-			sslTotalTime := time.Since(sslStartTime)
-			log.Printf("[SSL TIMING] SSL job '%s' failed in %v (total SSL time: %v)", jobKey, time.Since(jobCreateStart), sslTotalTime)
-			// Job failed, update with error
-			errorProgress := utils.LabProgressEntry{
-				Timestamp:   time.Now().Unix(),
-				Status:      utils.Error,
-				Message:     "SSL certificate check failed",
-				ServiceName: utils.SSL_SERVICE,
-			}
-			utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, errorProgress)
-			log.Printf("SSL progress error logged for LabID: %s", params.LabID)
-			break
-		}
-		time.Sleep(5 * time.Second)
-	}
+	// Don't wait for job completion - progress monitoring is now async
+	log.Printf("SSL progress monitoring started asynchronously for LabID: %s", params.LabID)
 
 	return nil
 }
