@@ -89,31 +89,14 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		DirtyReadPaths: []string{},
 	}
 	utils.RedisUtilsInstance.CreateLabInstance(labInstance)
-	destinationKey := fmt.Sprintf("code/%s/%s", payload.Language, payload.LabID)
-
 	sourceKey := fmt.Sprintf("boilerplate/%s", payload.Language)
-
-	err = utils.CopyS3Folder(sourceKey, destinationKey)
-	if err != nil {
-		log.Printf("start-quest: async copy failed: %v", err)
-		// Update lab status to error
-		errorProgress := utils.LabProgressEntry{
-			Timestamp:   time.Now().Unix(),
-			Status:      utils.Error,
-			Message:     fmt.Sprintf("Failed to copy files: %v", err),
-			ServiceName: utils.S3_SERVICE,
-		}
-		utils.RedisUtilsInstance.UpdateLabInstanceProgress(payload.LabID, errorProgress)
-		return events.APIGatewayProxyResponse{StatusCode: 500, Body: fmt.Sprintf(`{"error":"Async copy failed: %s"}`, err.Error())}, nil
-	}
-	log.Printf("start-quest:  copy completed successfully for %s", payload.LabID)
 
 	params := k8s.SpinUpParams{
 		LabID:                 payload.LabID,
 		Language:              payload.Language,
 		AppName:               fmt.Sprintf("%s-%s", payload.Language, payload.LabID),
 		S3Bucket:              os.Getenv("AWS_S3_BUCKET_NAME"),
-		S3Key:                 destinationKey,
+		S3Key:                 sourceKey,
 		Namespace:             os.Getenv("K8S_NAMESPACE"),
 		ShouldCreateNamespace: false,
 	}
