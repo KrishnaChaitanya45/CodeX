@@ -19,16 +19,13 @@ export async function POST(request: Request) {
       body: JSON.stringify({ language, labId })
     });
     
-    // return NextResponse.json({
 
-    //   success:false,
-    //   message: 'Failed to start playground'
-    // })
-
-    return NextResponse.json( {
-      success:true,
-      labId
-    }, { status: 200 });
+    const data = await res.json();
+    return NextResponse.json({
+      success: true,
+      labId,
+      ...data
+    }, { status: res.status });
   } catch (err) {
     console.error('Start proxy error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

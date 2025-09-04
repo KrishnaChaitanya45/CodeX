@@ -60,7 +60,18 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		return events.APIGatewayProxyResponse{StatusCode: 500, Body: fmt.Sprintf(`{"error":"Failed to get number of active lab instances: %s"}`, err.Error())}, nil
 	}
 	if count > ALLOWED_CONCURRENT_LABS {
-		return events.APIGatewayProxyResponse{StatusCode: 429, Body: fmt.Sprintf(`{"error":"Exceeded maximum concurrent labs: %d"}`, ALLOWED_CONCURRENT_LABS)}, nil
+		response := map[string]interface{}{
+			"error":   "Exceeded maximum concurrent labs",
+			"allowed": ALLOWED_CONCURRENT_LABS,
+			"current": count,
+		}
+		jsonResp, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("start-quest: failed to marshal JSON response: %v", err)
+			return events.APIGatewayProxyResponse{StatusCode: 500, Body: fmt.Sprintf(`{"error":"Failed to marshal JSON response: %s"}`, err.Error())}, nil
+		}
+
+		return events.APIGatewayProxyResponse{StatusCode: 429, Body: string(jsonResp)}, nil
 	}
 	// Initialize k8s client from in-cluster token/env
 	if err := k8s.InitK8sInCluster(); err != nil {
