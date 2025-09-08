@@ -15,14 +15,23 @@ spec:
     metadata:
       labels:
         app: '{{.LabID}}'
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/app-container: runtime/default
     spec:
+      runtimeClassName: gvisor  
       volumes:
         - name: workspace-volume
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 2Gi
       securityContext:
+        appArmorProfile:
+          type: RuntimeDefault
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: copy-r2-content
           image: amazon/aws-cli:latest
@@ -52,16 +61,51 @@ spec:
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+{{- if .RequiresInitCommand }}
+        - name: setup-init
+          image: krishnawyvern/devsarena-node-runtime:v1.1
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running setup command: {{.RequiresInitCommand}}"
+              cd /workspace && {{.RequiresInitCommand}}
+          volumeMounts:
+            - name: workspace-volume
+              mountPath: /workspace
+          workingDir: /workspace
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - SETUID
+                - SETGID
+{{- end }}
 
       containers:
         - name: app-container
-          image: krishnawyvern/devsarena-node-runtime
+          image: krishnawyvern/devsarena-node-runtime:v1.1
           ports:
-            - name: user-app-vite # Port for Vite dev server
+            - name: user-app-vite
               containerPort: 5173
-            - name: user-app-serve # Port for 'serve' package
+            - name: user-app-serve
               containerPort: 3000
-            - name: pty-ws # WebSocket for the pseudo-terminal
+            - name: pty-ws
               containerPort: 8082
           resources:
             requests:
@@ -70,6 +114,19 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - SETUID
+                - SETGID
           env:
             - name: REDIS_URI
               valueFrom:
@@ -78,6 +135,12 @@ spec:
                   key: REDIS_URI
             - name: LAB_ID
               value: '{{.LabID}}'
+            - name: SECURITY_MODE
+              value: "restricted"
+            - name: PTY_PING_INTERVAL
+              value: "30"
+            - name: PTY_PONG_TIMEOUT
+              value: "60"
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
@@ -95,6 +158,17 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
           env:
             - name: LAB_ID
               value: '{{.LabID}}'

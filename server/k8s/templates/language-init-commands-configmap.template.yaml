@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: language-init-commands
+  namespace: devsarena
+data:
+  react: "npm install"
+  node: "npm install"
+  express: "npm install"
+  python: "pip install -r requirements.txt"
+  java: "mvn install"
+  go: "go mod download"

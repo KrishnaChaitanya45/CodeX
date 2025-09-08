@@ -138,15 +138,7 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := struct {
-		LabID                 string
-		Language              string
-		AppName               string
-		S3Bucket              string
-		S3Key                 string
-		Namespace             string
-		ShouldCreateNamespace bool
-	}{
+	params := k8s.SpinUpParams{
 		LabID:                 labId,
 		Language:              language,
 		AppName:               fmt.Sprintf("%s-%s", language, labId),
@@ -169,7 +161,15 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	response := map[string]interface{}{
+		"success": true,
+		"labId":   labId,
+		"message": "Provisioning started",
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+	log.Printf("Provisioning started for LabID: %s", labId)
+
 }
 
 func (s *Server) EndLabHandler(w http.ResponseWriter, r *http.Request) {

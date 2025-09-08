@@ -20,7 +20,7 @@ import (
 
 var sslStartTime time.Time
 
-// SpinUpParams holds all the variables needed for the templates.
+// SpinUpParams holds variables needed for the templates.
 type SpinUpParams struct {
 	LabID                 string
 	Language              string
@@ -31,6 +31,17 @@ type SpinUpParams struct {
 	ShouldCreateNamespace bool
 }
 
+type SpinUpWithInit struct {
+	LabID                 string
+	Language              string
+	AppName               string
+	S3Bucket              string
+	S3Key                 string
+	Namespace             string
+	ShouldCreateNamespace bool
+	RequiresInitCommand   string
+}
+
 type SpinDownParams struct {
 	LabID     string
 	Language  string
@@ -38,7 +49,64 @@ type SpinDownParams struct {
 	Namespace string
 }
 
-// SpinUpPodWithLanguage orchestrates the creation of all necessary K8s resources.
+func CreateLanguageInitCommandsConfigMapIfDoesNotExists() error {
+	yamlFilePath := "k8s/templates/language-init-commands-configmap.template.yaml"
+	configMapName := "language-init-commands"
+	namespace := "devsarena"
+
+	_, err := ClientSet.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err == nil {
+		log.Printf("Language init commands ConfigMap '%s' already exists, skipping.", configMapName)
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	var processedYaml bytes.Buffer
+	tmpl, err := template.ParseFiles(yamlFilePath)
+	if err != nil {
+		return fmt.Errorf("error parsing configmap template file %s: %w", yamlFilePath, err)
+	}
+
+	if err := tmpl.Execute(&processedYaml, nil); err != nil {
+		return fmt.Errorf("error executing configmap template: %w", err)
+	}
+
+	var configMap corev1.ConfigMap
+	if err := yaml.Unmarshal(processedYaml.Bytes(), &configMap); err != nil {
+		return fmt.Errorf("error unmarshalling configmap YAML: %w", err)
+	}
+
+	log.Printf("Creating language init commands ConfigMap '%s'", configMap.Name)
+	_, err = ClientSet.CoreV1().ConfigMaps(namespace).Create(context.TODO(), &configMap, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Language init commands ConfigMap '%s' created successfully", configMapName)
+
+	return nil
+}
+
+func GetInitCommandForLanguage(language string) (string, error) {
+	configMapName := "language-init-commands"
+	namespace := "devsarena"
+
+	configMap, err := ClientSet.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get language init commands configmap: %w", err)
+	}
+
+	if command, exists := configMap.Data[language]; exists {
+		return command, nil
+	}
+
+	// Default fallback for unknown languages
+	log.Printf("No init command found for language '%s', using default", language)
+	return "", nil
+}
+
 func SpinUpPodWithLanguage(params SpinUpParams) error {
 	log.Printf("Starting to spin up resources for LabID: %s, S3Bucket: %s, S3Key: %s", params.LabID, params.S3Bucket, params.S3Key)
 	progress := utils.LabProgressEntry{
@@ -49,13 +117,33 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 	}
 	utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, progress)
 
+	if err := CreateLanguageInitCommandsConfigMapIfDoesNotExists(); err != nil {
+		log.Printf("Warning: Could not create language init commands configmap: %v", err)
+	}
+
+	requiresInitCmd := ""
+	if initCmd, err := GetInitCommandForLanguage(params.Language); err == nil {
+		requiresInitCmd = initCmd
+	}
+
+	deploymentParams := SpinUpWithInit{
+		LabID:                 params.LabID,
+		Language:              params.Language,
+		AppName:               params.AppName,
+		S3Bucket:              params.S3Bucket,
+		S3Key:                 params.S3Key,
+		Namespace:             params.Namespace,
+		ShouldCreateNamespace: params.ShouldCreateNamespace,
+		RequiresInitCommand:   requiresInitCmd,
+	}
+
 	if params.ShouldCreateNamespace {
 		if err := CreateNamespaceFromYamlIfDoesNotExists(params); err != nil {
 			return fmt.Errorf("could not create namespace: %w", err)
 		}
 	}
 
-	if err := CreateDeploymentFromYamlIfDoesNotExists(params); err != nil {
+	if err := CreateDeploymentFromYamlIfDoesNotExists(deploymentParams); err != nil {
 		return fmt.Errorf("could not create deployment: %w", err)
 	}
 	if err := CreateServiceFromYamlIfDoesNotExists(params); err != nil {
@@ -122,7 +210,7 @@ func CreateNamespaceFromYamlIfDoesNotExists(params SpinUpParams) error {
 	return err
 }
 
-func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpParams) error {
+func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpWithInit) error {
 	yamlFilePath := "k8s/templates/deployment.template.yaml"
 	deploymentName := fmt.Sprintf("%s-deployment", params.LabID)
 

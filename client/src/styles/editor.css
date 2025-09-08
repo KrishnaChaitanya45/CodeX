@@ -1,0 +1,62 @@
+/* Code Editor Selection Styles */
+/* Ensures text selection is visible in CodeMirror with Tokyo Night theme */
+
+.cm-editor .cm-selectionBackground,
+.cm-editor .cm-selectionLayer .cm-selectionBackground {
+  background-color: #364a82 !important;
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionLayer .cm-selectionBackground {
+  background-color: #4a5a9e !important;
+  opacity: 1;
+}
+
+/* Browser native selection */
+.cm-editor ::selection {
+  background-color: #364a82 !important;
+}
+
+.cm-editor ::-moz-selection {
+  background-color: #364a82 !important;
+}
+
+/* Selection matches */
+.cm-editor .cm-selectionMatch {
+  background-color: rgba(122, 162, 247, 0.3);
+}
+
+/* Ensure selection is visible on all elements */
+.cm-editor .cm-line ::selection,
+.cm-editor .cm-content ::selection {
+  background-color: #364a82 !important;
+}
+
+/* Force selection visibility */
+.cm-editor *::selection {
+  background-color: #364a82 !important;
+}
+
+/* Handle different selection states */
+.cm-editor .cm-line:has(.cm-selectionBackground) {
+  position: relative;
+}
+
+/* Enhanced Cursor Styling */
+.cm-editor .cm-cursor {
+  background-color:  #c0caf580 !important;
+  border-left: none !important;
+  opacity: 1 !important;
+  width: 0.4rem !important;
+  margin-right: -0.5rem !important;
+}
+
+
+
+/* Ensure cursor is always visible */
+.cm-editor.cm-focused .cm-cursor {
+  border-left-color: #c0caf5 !important;
+  animation: none !important;
+}

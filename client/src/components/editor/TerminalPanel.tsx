@@ -1,10 +1,9 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Terminal } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import { Terminal, RotateCcw } from 'lucide-react';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
-const XTerminal = dynamic(() => import("./Terminal"), {ssr: false});
+import { TerminalTabs } from './TerminalTabs';
 interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
   message: string;
@@ -19,6 +18,7 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ logs, isRunning, onClear, params }: TerminalPanelProps) {
+  const [terminalKey, setTerminalKey] = useState(0);
   
   const getLogColor = (type: string) => {
     switch (type) {
@@ -29,24 +29,14 @@ export function TerminalPanel({ logs, isRunning, onClear, params }: TerminalPane
     }
   };
 
+  const handleRestart = () => {
+    setTerminalKey(prev => prev + 1);
+  };
+
   return (
-    <div className="h-full bg-black flex flex-col">
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-3 border-b border-purple-600/30 flex items-center justify-between">
-        <div className="flex items-center">
-          <Terminal className="w-4 h-4 mr-2 text-red-400" />
-          <span className="text-white font-medium">Console</span>
-        </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={onClear}
-          className="px-2 py-1 text-xs text-gray-400 hover:text-white transition-colors"
-        >
-          Clear
-        </motion.button>
-      </div>
-      <div className="flex-1 p-3 overflow-y-auto font-mono text-sm">
-      <XTerminal params={params}/>
+    <div className="h-full  flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-hidden">
+        <TerminalTabs key={terminalKey} params={params} />
       </div>
     </div>
   );
