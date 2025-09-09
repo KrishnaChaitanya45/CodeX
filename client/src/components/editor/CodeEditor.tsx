@@ -16,6 +16,9 @@ import {  tokyoNight} from "../../constants/TokyoNight";
 import { linter, lintGutter } from "@codemirror/lint";
 import { autocompletion } from "@codemirror/autocomplete";
 
+// Import editor styles
+import "../../styles/editor.css";
+
 
 interface CodeEditorProps {
   activeFile: string;
@@ -99,7 +102,7 @@ const getLanguageConfig = (fileName: string) => {
       case "md":
         return { extension: [markdown()], parser: "markdown" };
       default:
-        return { extension: [], parser: "babel" }; // Default to babel for unknown types
+        return { extension: [], parser: "babel" }; 
     }
   };
   const handleContextMenu = (event: React.MouseEvent) => {
@@ -113,13 +116,11 @@ const getLanguageConfig = (fileName: string) => {
     keymap.of([indentWithTab]),
     lintGutter(),
     autocompletion(),
-  // Do not set language data 'autocomplete' to a non-function value;
-  // autocompletion() will use language-provided completion sources when available.
   ], [extension]);
 
   return (
     <div className="h-full bg-black flex flex-col" onContextMenu={handleContextMenu} onClick={() => setContextMenu(null)}>
-      {/* Editor Header */}
+        {/* Editor Header */}
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-3 border-b border-purple-600/30 flex items-center justify-between">
         <div className="flex items-center">
           {getFileIcon(activeFile.split("/").pop() || "")}
@@ -162,6 +163,6 @@ const getLanguageConfig = (fileName: string) => {
           </ul>
         </div>
       )}
-    </div>
+      </div>
   );
 }

@@ -7,7 +7,7 @@ import { tags as t } from "@lezer/highlight";
 const colors = {
   background: "#1a1b26",
   foreground: "#a9b1d6",
-  selection: "#44475a",
+  selection: "#364a82", // Updated: More visible purple-blue that matches theme // Updated: More visible purple-blue that matches theme
   cursor: "#c0caf5",
   lineHighlight: "#1f2335",
   gutterBackground: "#1a1b26",
@@ -37,9 +37,6 @@ export const tokyoNightTheme = EditorView.theme(
     ".cm-content": {
       caretColor: colors.cursor,
     },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: colors.cursor },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-      { backgroundColor: colors.selection },
     ".cm-activeLine": { backgroundColor: colors.lineHighlight },
     ".cm-gutters": {
       backgroundColor: colors.gutterBackground,
@@ -48,6 +45,10 @@ export const tokyoNightTheme = EditorView.theme(
     },
     ".cm-activeLineGutter": {
       backgroundColor: colors.lineHighlight,
+    },
+    // Enhanced selection styling
+    ".cm-selectionMatch": {
+      backgroundColor: "rgba(122, 162, 247, 0.2)", // Subtle blue highlight for matches
     },
   },
   { dark: true }

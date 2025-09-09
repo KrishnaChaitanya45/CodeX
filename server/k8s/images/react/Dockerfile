@@ -41,11 +41,6 @@ COPY src ./src
 COPY public ./public
 COPY index.html package.json vite.config.js .gitignore eslint.config.js README.md ./
 
-USER root
-# Copy start script into secure pty-service dir and set permissions
-COPY start.sh /pty-service/start.sh
-RUN chmod 700 /pty-service/start.sh && chown appuser:appgroup /pty-service/start.sh
-
 # Switch to non-root
 USER appuser
 

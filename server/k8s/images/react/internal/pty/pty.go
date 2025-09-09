@@ -8,20 +8,24 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 )
 
 func getWorkspaceDir() string {
-	// Use absolute path to the shared workspace directory
 	return "/workspace"
 }
 
-// ptyHandler manages the WebSocket connection for the pseudo-terminal.
 type ptyHandler struct {
 	conn *websocket.Conn
 	mu   sync.Mutex
+}
+
+type WSMessage struct {
+	Type string `json:"type"`
+	Data string `json:"data,omitempty"`
 }
 
 // startPtyServer sets up the HTTP handler for the pseudo-terminal WebSocket.
@@ -135,6 +139,25 @@ func (h *ptyHandler) startPtySession() {
 		}
 	}()
 
+	// Start a goroutine to send heartbeat messages to the client
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				heartbeat := WSMessage{Type: "heartbeat"}
+				heartbeatBytes, _ := json.Marshal(heartbeat)
+				h.mu.Lock()
+				if err := h.conn.WriteMessage(websocket.TextMessage, heartbeatBytes); err != nil {
+					h.mu.Unlock()
+					return
+				}
+				h.mu.Unlock()
+			}
+		}
+	}()
+
 	// Read messages from the WebSocket and write to the pty
 	for {
 		_, msg, err := h.conn.ReadMessage()
@@ -149,17 +172,34 @@ func (h *ptyHandler) startPtySession() {
 			UpdateLabMonitorQueue(labId)
 		}
 
-		// The message from the frontend might be JSON-encoded
-		var input map[string]string
-		if err := json.Unmarshal(msg, &input); err == nil {
-			if data, ok := input["data"]; ok {
-				if _, err := io.WriteString(ptmx, data); err != nil {
+		// Parse the WebSocket message
+		var wsMsg WSMessage
+		if err := json.Unmarshal(msg, &wsMsg); err == nil {
+			switch wsMsg.Type {
+			case "input":
+				// Write input data to PTY
+				if _, err := io.WriteString(ptmx, wsMsg.Data); err != nil {
 					log.Printf("Error writing to pty: %v", err)
 					break
 				}
+			case "heartbeat":
+				// Respond to heartbeat from client
+				response := WSMessage{Type: "heartbeat_response"}
+				responseBytes, _ := json.Marshal(response)
+				h.mu.Lock()
+				if err := h.conn.WriteMessage(websocket.TextMessage, responseBytes); err != nil {
+					log.Printf("Error sending heartbeat response: %v", err)
+					h.mu.Unlock()
+					break
+				}
+				h.mu.Unlock()
+			case "heartbeat_response":
+				// Received heartbeat response from client, do nothing
+			default:
+				log.Printf("Unknown message type: %s", wsMsg.Type)
 			}
 		} else {
-			// Fallback for raw strings
+			// Fallback for raw strings (legacy support)
 			if _, err := ptmx.Write(msg); err != nil {
 				log.Printf("Error writing raw message to pty: %v", err)
 				break

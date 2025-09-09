@@ -1,0 +1,59 @@
+/* Terminal specific overrides */
+.xterm {
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+.xterm .xterm-viewport {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+  height: 100% !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.xterm .xterm-screen {
+  overflow: visible !important;
+}
+
+.xterm .xterm-rows {
+  overflow: visible !important;
+}
+
+.xterm-helper-textarea {
+  position: absolute;
+  opacity: 0;
+  left: -9999em;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: -10;
+  white-space: nowrap;
+  overflow: hidden;
+  resize: none;
+}
