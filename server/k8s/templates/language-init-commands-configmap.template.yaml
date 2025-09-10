@@ -4,9 +4,7 @@ metadata:
   name: language-init-commands
   namespace: devsarena
 data:
-  react: "npm install"
-  node: "npm install"
-  express: "npm install"
-  python: "pip install -r requirements.txt"
-  java: "mvn install"
-  go: "go mod download"
+  # Node.js applications don't need init commands as they run npm install via start commands
+  # react: ""
+  # node: ""
+  # node-express: ""

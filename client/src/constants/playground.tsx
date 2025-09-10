@@ -20,6 +20,7 @@ export type PlaygroundOption = {
   isLive: boolean;
   color: string;
   mainFile: string;
+  startCommands?: string[];
 };
 
 export const PLAYGROUND_OPTIONS: PlaygroundOption[] = [
@@ -32,26 +33,29 @@ export const PLAYGROUND_OPTIONS: PlaygroundOption[] = [
     icon: <Zap className="w-8 h-8 text-purple-400" />,
     color: "border-purple-500/50 hover:border-purple-500",
     mainFile: "App.jsx",
+    startCommands: ["npm install", "npm run dev"],
   },
   {
     id: "node-express",
-    isLive: false,
+    isLive: true,
     label: "Express.js App",
     language: "node-express",
     info: "🚀 Full-stack Node.js with Express. Build REST APIs and web applications with ease.",
     icon: <Server className="w-8 h-8 text-red-400" />,
     color: "border-red-500/50 hover:border-red-500",
     mainFile: "index.js",
+    startCommands: ["npm install", "npm run dev"],
   },
   {
     id: "node",
     label: "Node.js App",
     language: "node",
-    isLive: false,
+    isLive: true,
     info: "📦 Pure Node.js environment. Perfect for backend services and command-line tools.",
     icon: <Rocket className="w-8 h-8 text-purple-400" />,
     color: "border-purple-500/50 hover:border-purple-500",
     mainFile: "index.js",
+    startCommands: ["node index.js"],
   },
   {
     id: "vanilla-js",

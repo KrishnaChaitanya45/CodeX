@@ -39,7 +39,7 @@ type SpinUpWithInit struct {
 	S3Key                 string
 	Namespace             string
 	ShouldCreateNamespace bool
-	RequiresInitCommand   string
+	RequiresInitCommand   *string
 }
 
 type SpinDownParams struct {
@@ -90,6 +90,13 @@ func CreateLanguageInitCommandsConfigMapIfDoesNotExists() error {
 }
 
 func GetInitCommandForLanguage(language string) (string, error) {
+	// For our Node.js applications, we don't need init commands
+	// as they handle installation via start commands in the playground
+	switch language {
+	case "react", "node", "node-express":
+		return "", nil
+	}
+
 	configMapName := "language-init-commands"
 	namespace := "devsarena"
 
@@ -98,7 +105,7 @@ func GetInitCommandForLanguage(language string) (string, error) {
 		return "", fmt.Errorf("failed to get language init commands configmap: %w", err)
 	}
 
-	if command, exists := configMap.Data[language]; exists {
+	if command, exists := configMap.Data[language]; exists && command != "" {
 		return command, nil
 	}
 
@@ -122,8 +129,13 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 	}
 
 	requiresInitCmd := ""
-	if initCmd, err := GetInitCommandForLanguage(params.Language); err == nil {
+	var requiresInitCmdPtr *string
+	if initCmd, err := GetInitCommandForLanguage(params.Language); err == nil && initCmd != "" {
 		requiresInitCmd = initCmd
+		requiresInitCmdPtr = &requiresInitCmd
+		log.Printf("Init command found for language '%s': %s", params.Language, initCmd)
+	} else {
+		log.Printf("No init command required for language '%s'", params.Language)
 	}
 
 	deploymentParams := SpinUpWithInit{
@@ -134,7 +146,7 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 		S3Key:                 params.S3Key,
 		Namespace:             params.Namespace,
 		ShouldCreateNamespace: params.ShouldCreateNamespace,
-		RequiresInitCommand:   requiresInitCmd,
+		RequiresInitCommand:   requiresInitCmdPtr,
 	}
 
 	if params.ShouldCreateNamespace {
@@ -220,27 +232,34 @@ func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpWithInit) error {
 		return nil
 	}
 	if !errors.IsNotFound(err) {
+		log.Printf("Error checking for existing deployment '%s': %v", deploymentName, err)
 		return err
 	}
 
 	var processedYaml bytes.Buffer
 	tmpl, err := template.ParseFiles(yamlFilePath)
 	if err != nil {
-		return err
+		log.Printf("Error parsing deployment template file '%s': %v", yamlFilePath, err)
+		return fmt.Errorf("error parsing template file %s: %w", yamlFilePath, err)
 	}
 	if err := tmpl.Execute(&processedYaml, params); err != nil {
-		return err
+		log.Printf("Error executing deployment template for LabID '%s': %v", params.LabID, err)
+		return fmt.Errorf("error executing template: %w", err)
 	}
+
+	log.Printf("DEBUG: Processed deployment YAML for LabID '%s':\n%s", params.LabID, processedYaml.String())
 
 	var deployment appsv1.Deployment
 	if err := yaml.Unmarshal(processedYaml.Bytes(), &deployment); err != nil {
+		log.Printf("Error unmarshalling deployment YAML for LabID '%s': %v", params.LabID, err)
 		return fmt.Errorf("error unmarshalling deployment YAML: %w", err)
 	}
 
 	log.Printf("Creating deployment '%s'", deployment.Name)
 	_, err = ClientSet.AppsV1().Deployments(params.Namespace).Create(context.TODO(), &deployment, metav1.CreateOptions{})
 	if err != nil {
-		return err
+		log.Printf("Error creating deployment '%s': %v", deployment.Name, err)
+		return fmt.Errorf("error creating deployment: %w", err)
 	}
 
 	// Update progress for deployment creation
@@ -251,7 +270,7 @@ func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpWithInit) error {
 		ServiceName: utils.SERVER_SERVICE,
 	}
 	utils.RedisUtilsInstance.UpdateLabInstanceProgress(params.LabID, progress)
-	return err
+	return nil
 }
 
 func CreateServiceFromYamlIfDoesNotExists(params SpinUpParams) error {
