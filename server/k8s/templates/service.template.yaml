@@ -9,17 +9,32 @@ spec:
   selector:
     app: '{{.LabID}}'
   ports:
-    # Port for the Vite dev server
-    - name: app-vite-dev
+{{- if eq .Language "react" }}
+    # Port for the Vite dev server (React)
+    - name: vite-dev
       port: 5173
       targetPort: 5173
       protocol: TCP
-    # Port for the 'serve' production build
-    - name: app-serve-prod
-      port: 3000
-      targetPort: 3000
+{{- else if eq .Language "node" }}
+    # Port for Node.js applications
+    - name: node
+      port: 8000
+      targetPort: 8000
       protocol: TCP
-    # ... (ports for your runner-container)
+{{- else if eq .Language "node-express" }}
+    # Port for Node-Express applications
+    - name: node-express
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+{{- else }}
+    # Default to React port
+    - name: vite-dev
+      port: 5173
+      targetPort: 5173
+      protocol: TCP
+{{- end }}
+    # WebSocket ports (always needed)
     - name: fs-ws
       port: 8081
       targetPort: 8081

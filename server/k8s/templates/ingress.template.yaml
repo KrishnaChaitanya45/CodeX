@@ -30,10 +30,37 @@ spec:
                 name: '{{.LabID}}-service'
                 port:
                   name: pty-ws
+          # Application routes based on language
+{{- if eq .Language "react" }}
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: '{{.LabID}}-service'
                 port:
-                  name: app-vite-dev
+                  name: vite-dev
+{{- else if eq .Language "node" }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: '{{.LabID}}-service'
+                port:
+                  name: node
+{{- else if eq .Language "node-express" }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: '{{.LabID}}-service'
+                port:
+                  name: node-express
+{{- else }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: '{{.LabID}}-service'
+                port:
+                  name: vite-dev
+{{- end }}

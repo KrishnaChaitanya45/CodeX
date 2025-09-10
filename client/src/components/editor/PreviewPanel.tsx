@@ -10,6 +10,7 @@ import {
   WifiOff     // Icon for the UI
 } from 'lucide-react';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
+import { dlog } from '@/utils/debug';
 
 interface PreviewPanelProps {
   // Props are kept for potential future use, but not directly used in this logic
@@ -17,29 +18,36 @@ interface PreviewPanelProps {
   cssContent: string;
   jsContent: string;
   onExport?: () => void;
-  params:ProjectParams
+  params:ProjectParams;
+  startCommands?: string[];
 }
 
 // A dedicated component for the "App Not Running" UI
-const AppOfflineUI = ({ onRetry }: { onRetry: () => void }) => (
-  <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 text-gray-700">
-    <div className="p-4 bg-red-100 rounded-full mb-4">
-      <Power size={32} className="text-red-500" />
+const AppOfflineUI = ({ onRetry, startCommands }: { onRetry: () => void; startCommands?: string[] }) => (
+  <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gradient-to-br from-gray-50 to-gray-100 text-gray-700">
+    <div className="p-6 bg-red-50 rounded-full mb-6 shadow-sm">
+      <Power size={40} className="text-red-500" />
     </div>
-    <h2 className="text-xl font-semibold text-gray-800 mb-2">Application Not Running</h2>
-    <p className="text-gray-500 mb-6 max-w-sm">
-      To see your live preview, please start the development server in the terminal.
+    <h2 className="text-2xl font-bold text-gray-800 mb-3">Application Not Running</h2>
+    <p className="text-gray-600 mb-8 max-w-md leading-relaxed">
+      To see your live preview, please start the development server in the terminal below.
     </p>
-    <div className="bg-gray-800 text-left p-4 rounded-lg font-mono text-sm text-white w-full max-w-xs">
-      <span className="text-green-400">$</span> <span className="text-white">npm run dev</span>
-      <br />
-
-    </div>
+    {startCommands && startCommands.length > 0 && (
+      <div className="bg-gray-900 border border-gray-700 text-left p-5 rounded-lg font-mono text-sm w-full max-w-sm mb-8 shadow-lg">
+        <div className="text-gray-300 text-xs mb-3 font-sans font-medium uppercase tracking-wide">Run these commands:</div>
+        {startCommands.map((command, index) => (
+          <div key={index} className="flex items-center py-1.5">
+            <span className="text-green-400 mr-3 text-sm">$</span>
+            <span className="text-gray-100 font-medium">{command}</span>
+          </div>
+        ))}
+      </div>
+    )}
     <motion.button
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       onClick={onRetry}
-      className="mt-8 bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+      className="bg-gradient-to-r from-purple-600 to-purple-700 text-white font-semibold py-3 px-8 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 flex items-center gap-2 shadow-lg"
     >
       <RotateCcw className="w-4 h-4" />
       Retry Connection
@@ -59,7 +67,7 @@ const LoadingUI = () => (
 );
 
 
-export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, params }: PreviewPanelProps) {
+export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, params, startCommands }: PreviewPanelProps) {
   const iFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [appStatus, setAppStatus] = useState<'loading' | 'online' | 'offline'>('loading');
   const appUrl = window.location.protocol === 'https:' ? `https://${params.labId}.devsarena.in/` : `http://${params.labId}.devsarena.in/`;
@@ -73,6 +81,7 @@ export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, par
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
       const response = await fetch(appUrl, { signal: controller.signal, cache: 'no-store' });
+      console.log('Health check response status:', response.status);
       clearTimeout(timeoutId);
 
       // Check if the server responded with a successful status code (2xx)
@@ -82,6 +91,7 @@ export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, par
         setAppStatus('offline');
       }
     } catch (error) {
+      dlog("CONNECTION ERROR",error);
       // This catches network errors (e.g., connection refused)
       setAppStatus('offline');
     }
@@ -135,7 +145,7 @@ export function PreviewPanel({ htmlContent, cssContent, jsContent, onExport, par
       
       <div className="w-full h-full flex-grow">
         {appStatus === 'loading' && <LoadingUI />}
-        {appStatus === 'offline' && <AppOfflineUI onRetry={checkAppStatus} />}
+        {appStatus === 'offline' && <AppOfflineUI onRetry={checkAppStatus} startCommands={startCommands} />}
         {appStatus === 'online' && (
           <iframe
             ref={iFrameRef}

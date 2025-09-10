@@ -53,6 +53,9 @@ export default function V1ProjectPage() {
   const language = getParamString(params?.language) || 'html';
   const labId = getParamString(params?.labId) || 'test-lab';
 
+  // Find the current playground option based on language
+  const currentPlaygroundOption = PLAYGROUND_OPTIONS.find(option => option.id === language);
+
   // Unified bootstrap hook (single path)
   const bootstrap = useLabBootstrap({ labId, language, autoConnectPty: false });
 
@@ -490,6 +493,7 @@ export default function V1ProjectPage() {
                 cssContent={getCurrentFileContent('src/styles.css') || ''}
                 jsContent={getCurrentFileContent('src/script.js') || ''}
                 params={{ language, labId }}
+                startCommands={currentPlaygroundOption?.startCommands}
               />
             </Panel>
 

@@ -71,7 +71,7 @@ spec:
                 - ALL
 {{- if .RequiresInitCommand }}
         - name: setup-init
-          image: krishnawyvern/devsarena-node-runtime:v1.1
+          image: krishnawyvern/devsarena-node-runtime:v1.2  
           command:
             - /bin/sh
             - -c
@@ -99,12 +99,21 @@ spec:
 
       containers:
         - name: app-container
-          image: krishnawyvern/devsarena-node-runtime:v1.1
+          image: krishnawyvern/devsarena-node-runtime:v1.2
           ports:
-            - name: user-app-vite
+{{- if eq .Language "react" }}
+            - name: vite-dev
               containerPort: 5173
-            - name: user-app-serve
-              containerPort: 3000
+{{- else if eq .Language "node" }}
+            - name: node
+              containerPort: 8000
+{{- else if eq .Language "node-express" }}
+            - name: node-express
+              containerPort: 4000
+{{- else }}
+            - name: vite-dev
+              containerPort: 5173
+{{- end }}
             - name: pty-ws
               containerPort: 8082
           resources:
@@ -141,6 +150,13 @@ spec:
               value: "30"
             - name: PTY_PONG_TIMEOUT
               value: "60"
+            # Application ports for different languages
+            - name: REACT_PORT
+              value: "5173"
+            - name: NODE_PORT
+              value: "8000"
+            - name: NODE_EXPRESS_PORT
+              value: "4000"
           volumeMounts:
             - name: workspace-volume
               mountPath: /workspace
@@ -149,7 +165,7 @@ spec:
         - name: runner-container
           image: krishnawyvern/devsarena-runner-service
           ports:
-            - name: fs-ws # WebSocket for file system events
+            - name: fs-ws
               containerPort: 8081
           resources:
             requests:
