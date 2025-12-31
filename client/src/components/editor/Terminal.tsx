@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import '../../styles/terminal.css';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
-import { buildPtyUrl } from '@/lib/pty';
+import { buildPtyUrl, sendPtyKillUserProcesses } from '@/lib/pty';
 import { dlog } from '@/utils/debug';
 
 export interface TerminalHandle {
@@ -36,6 +36,7 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
   const isVisibleRef = useRef(isVisible);
   const instanceId = terminalId || 'default';
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupSentRef = useRef(false);
 
   // Memoize terminal configuration to prevent unnecessary re-creation
   const terminalConfig = useMemo(() => ({
@@ -99,6 +100,8 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
     console.log('Terminal: Starting initialization for labId:', params?.labId);
 
     const term = new Terminal(terminalConfig);
+
+    cleanupSentRef.current = false;
 
     let resizeHandler: (() => void) | null = null;
     // Must be let because we enhance this cleanup later after dynamic import
@@ -270,6 +273,12 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
       }
     };
     term.onData(onData);
+
+    const requestCleanup = () => {
+      if (cleanupSentRef.current) return;
+      cleanupSentRef.current = true;
+      sendPtyKillUserProcesses(currentSocket);
+    };
     
     const createSocket = () => {
       try {
@@ -424,7 +433,21 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
     createSocket();
     console.log('Terminal: Socket creation initiated');
 
+    const onBeforeUnload = () => requestCleanup();
+    const onPageHide = () => requestCleanup();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
+
     return () => {
+      try {
+        requestCleanup();
+      } catch {}
+
+      try {
+        window.removeEventListener('beforeunload', onBeforeUnload);
+        window.removeEventListener('pagehide', onPageHide);
+      } catch {}
+
       cleanupResize();
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
