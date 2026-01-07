@@ -181,7 +181,7 @@ export function useLabBootstrap({
         if (data.activeCheckpoint !== undefined && data.activeCheckpoint !== null) {
           // New backend: number = next checkpoint to attempt; UI tracks last passed checkpoint
           if (typeof data.activeCheckpoint === 'number') {
-            setCurrentCheckpoint(Math.max(0, data.activeCheckpoint - 1));
+            setCurrentCheckpoint(Math.max(0, data.activeCheckpoint));
           } else if (typeof data.activeCheckpoint === 'string') {
           const checkpointNum = parseInt(data.activeCheckpoint.replace('checkpoint_', ''));
           if (!isNaN(checkpointNum)) {
@@ -508,7 +508,7 @@ export function useLabBootstrap({
 
           // Update current checkpoint based on the activeCheckpoint coming from PTY response
           if (typeof result.activeCheckpoint === 'number') {
-            setCurrentCheckpoint(Math.max(0, result.activeCheckpoint - 1));
+            setCurrentCheckpoint(Math.max(0, result.activeCheckpoint ));
           }
         }
         

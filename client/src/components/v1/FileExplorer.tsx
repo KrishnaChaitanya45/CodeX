@@ -1,14 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  FolderIcon, 
-  FolderOpenIcon, 
-  DocumentIcon,
-  PlusIcon,
-  EllipsisVerticalIcon,
-  ChevronRightIcon
-} from '@heroicons/react/24/outline';
+import {
+  Folder,
+  FolderOpen,
+  InsertDriveFile,
+  Description,
+  DataObject,
+  FiberManualRecord ,
+  Code,
+  IntegrationInstructions,
+  Javascript,
+  ChevronRight,
+  Css,
+  Html,
+} from '@mui/icons-material';
+import { EllipsisVertical } from 'lucide-react';
+import { PlusIcon } from '@heroicons/react/24/outline';
 
 interface FileExplorerProps {
   isCollapsed: boolean;
@@ -57,7 +65,40 @@ const FileItem: React.FC<{
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(name);
   const isDirectory = item.type === 'folder';
+const getFileIcon = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
 
+    const iconStyle = { fontSize: 18, marginRight: 8 };
+
+    switch (ext) {
+      case 'js':
+        return <Javascript style={{ ...iconStyle, color: '#f7df1e' }} />;
+
+      case 'jsx':
+        return <IntegrationInstructions style={{ ...iconStyle, color: '#61dafb' }} />;
+
+      case 'ts':
+        return <Code style={{ ...iconStyle, color: '#3178c6' }} />;
+
+      case 'tsx':
+        return <IntegrationInstructions style={{ ...iconStyle, color: '#61dafb' }} />;
+
+      case 'json':
+        return <DataObject style={{ ...iconStyle, color: '#fbc02d' }} />;
+
+      case 'md':
+        return <Description style={{ ...iconStyle, color: '#90a4ae' }} />;
+
+      case 'html':
+        return <Html style={{ ...iconStyle, color: '#e34f26' }} />;
+
+      case 'css':
+        return <Css style={{ ...iconStyle, color: '#1572b6' }} />;
+
+      default:
+        return <InsertDriveFile style={{ ...iconStyle, color: '#9e9e9e' }} />;
+    }
+  };
   const handleClick = () => {
     if (isDirectory) {
       onToggle(path);
@@ -95,12 +136,12 @@ const FileItem: React.FC<{
       >
         {isDirectory ? (
           isExpanded ? (
-            <FolderOpenIcon className="w-5 h-5 text-yellow-400" />
+            <FolderOpen className="w-5 h-5 text-yellow-400" />
           ) : (
-            <FolderIcon className="w-5 h-5 text-yellow-400" />
+            <Folder className="w-5 h-5 text-yellow-400" />
           )
         ) : (
-          <DocumentIcon className="w-5 h-5 text-gray-400" />
+          getFileIcon(name)
         )}
       </div>
     );
@@ -124,19 +165,19 @@ const FileItem: React.FC<{
         }}
       >
         {isDirectory && (
-          <ChevronRightIcon 
+          <ChevronRight 
             className={`w-4 h-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
           />
         )}
         
         {isDirectory ? (
           isExpanded ? (
-            <FolderOpenIcon className="w-4 h-4 mr-2 text-yellow-400" />
+            <FolderOpen className="w-4 h-4 mr-2 text-yellow-400" />
           ) : (
-            <FolderIcon className="w-4 h-4 mr-2 text-yellow-400" />
+            <Folder className="w-4 h-4 mr-2 text-yellow-400" />
           )
         ) : (
-          <DocumentIcon className="w-4 h-4 mr-2 text-gray-400" />
+         getFileIcon(name)
         )}
 
         {isRenaming ? (
@@ -152,7 +193,13 @@ const FileItem: React.FC<{
         ) : (
           <span className="flex-1 truncate">
             {name}
-            {isDirty && <span className="text-orange-400 ml-1">●</span>}
+            {isDirty && <FiberManualRecord
+  style={{
+    fontSize: 10,
+    color: '#f97316', 
+    marginLeft: 6,
+  }}
+/>}
           </span>
         )}
 
@@ -163,7 +210,7 @@ const FileItem: React.FC<{
             setShowMenu(!showMenu);
           }}
         >
-          <EllipsisVerticalIcon className="w-3 h-3" />
+          <EllipsisVertical className="w-3 h-3" />
         </button>
       </div>
 
@@ -385,7 +432,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         )}
         {isCollapsed && (
           <div className="flex justify-center w-full">
-            <FolderIcon className="w-4 h-4 text-gray-400" />
+            <Folder className="w-4 h-4 text-gray-400" />
           </div>
         )}
       </div>

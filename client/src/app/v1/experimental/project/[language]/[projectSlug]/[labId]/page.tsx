@@ -383,6 +383,9 @@ export default function ExperimentalProjectPage() {
       }]);
 
       await bootstrap.saveFile(activeFile, content);
+      setOpenFiles(prev => prev.map(f => 
+        f.path === activeFile ? { ...f, isDirty: false } : f
+      ));
 
       setConsoleLogs(prev => [...prev, {
         type: 'success',
@@ -531,7 +534,7 @@ export default function ExperimentalProjectPage() {
       setActiveRightTab('test-results');
 
       // Determine current checkpoint to test
-      const nextCheckpoint = bootstrap.currentCheckpoint + 1;
+      const nextCheckpoint = bootstrap.currentCheckpoint
       const checkpointId = `${nextCheckpoint}`;
 
       setConsoleLogs(prev => [...prev, {

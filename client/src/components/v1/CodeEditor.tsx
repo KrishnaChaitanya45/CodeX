@@ -7,10 +7,24 @@ import {
   PlayIcon,
   CheckIcon,
   DocumentArrowDownIcon,
-  DocumentIcon
+  DocumentIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
-import { File, Play, Square, Settings, Save } from 'lucide-react';
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import {
+  Folder,
+  FolderOpen,
+  InsertDriveFile,
+  Description,
+  DataObject,
+  FiberManualRecord ,
+  Code,
+  IntegrationInstructions,
+  Javascript,
+  ChevronRight,
+  Css,
+  Html,
+} from '@mui/icons-material';
 
 // Import CodeMirror extensions
 import { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
@@ -101,18 +115,38 @@ export default function CodeEditor({
     ? (currentFile?.content || '')
     : (fileContent || '');
 
-  const getFileIcon = (fileName: string) => {
-    const ext = fileName.split(".").pop()?.toLowerCase();
-    const iconClass = "w-4 h-4 mr-2";
+const getFileIcon = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+
+    const iconStyle = { fontSize: 18, marginRight: 8 };
 
     switch (ext) {
-      case "html": return <File className={`${iconClass} text-red-400`} />;
-      case "css": return <File className={`${iconClass} text-blue-400`} />;
-      case "js": case "jsx": return <File className={`${iconClass} text-yellow-400`} />;
-      case "ts": case "tsx": return <File className={`${iconClass} text-blue-300`} />;
-      case "json": return <File className={`${iconClass} text-green-400`} />;
-      case "md": return <File className={`${iconClass} text-gray-400`} />;
-      default: return <File className={`${iconClass} text-gray-400`} />;
+      case 'js':
+        return <Javascript style={{ ...iconStyle, color: '#f7df1e' }} />;
+
+      case 'jsx':
+        return <IntegrationInstructions style={{ ...iconStyle, color: '#61dafb' }} />;
+
+      case 'ts':
+        return <Code style={{ ...iconStyle, color: '#3178c6' }} />;
+
+      case 'tsx':
+        return <IntegrationInstructions style={{ ...iconStyle, color: '#61dafb' }} />;
+
+      case 'json':
+        return <DataObject style={{ ...iconStyle, color: '#fbc02d' }} />;
+
+      case 'md':
+        return <Description style={{ ...iconStyle, color: '#90a4ae' }} />;
+
+      case 'html':
+        return <Html style={{ ...iconStyle, color: '#e34f26' }} />;
+
+      case 'css':
+        return <Css style={{ ...iconStyle, color: '#1572b6' }} />;
+
+      default:
+        return <InsertDriveFile style={{ ...iconStyle, color: '#9e9e9e' }} />;
     }
   };
 
@@ -291,7 +325,7 @@ export default function CodeEditor({
         </div>
 
         {/* Editor Content */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           {openFiles.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-400">
               <div className="text-center">
@@ -309,7 +343,7 @@ export default function CodeEditor({
               </div>
             </div>
           ) : (
-            <div className="h-full">
+            <div className="h-full overflow-y-auto">
               <CodeMirror
                 ref={editorRef}
                 value={content}
@@ -367,7 +401,7 @@ export default function CodeEditor({
                 </>
               ) : (
                 <>
-                  <Play className="w-4 h-4 mr-1" />
+                  <PlayIcon className="w-4 h-4 mr-1" />
                   Run
                 </>
               )}

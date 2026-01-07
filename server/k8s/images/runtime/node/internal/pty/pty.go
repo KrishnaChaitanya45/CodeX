@@ -200,6 +200,7 @@ func (h *PtyHandler) handleTestMessage(raw json.RawMessage) {
 			h.sendMessage(outboundMessage{Type: "test_error", Data: map[string]any{"checkpointId": req.CheckpointID, "message": err.Error()}})
 			return
 		}
+		StoreTestResultInLab(LabID, result)
 		h.sendMessage(outboundMessage{Type: "test_completed", Data: result})
 	}()
 }

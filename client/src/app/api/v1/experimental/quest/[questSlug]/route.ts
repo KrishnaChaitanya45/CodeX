@@ -15,7 +15,7 @@ export async function GET(
     }
 
     // Get the backend URL from environment variables
-    const backendUrl =  'http://localhost:8080';
+    const backendUrl =  process.env.BACKEND_API_URL || 'http://localhost:8080';
     
     // Forward the request to the Go backend
     const backendResponse = await fetch(

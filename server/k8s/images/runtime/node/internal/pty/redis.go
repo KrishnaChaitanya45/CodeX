@@ -23,14 +23,6 @@ type LabProgressEntry struct {
 	ServiceName LabLogServices
 }
 
-type LabTestResult struct {
-	CheckpointID string `json:"checkpointId"`
-	Passed       bool   `json:"passed"`
-	Output       string `json:"output"`
-	Timestamp    string `json:"timestamp"`
-	Duration     int64  `json:"duration,omitempty"`
-}
-
 type LabStatus string
 
 const (
@@ -52,14 +44,15 @@ const (
 )
 
 type LabInstanceEntry struct {
-	LabID          string             `json:"labId"`
-	CreatedAt      int64              `json:"createdAt"`
-	Language       string             `json:"language"`
-	DirtyReadPaths []string           `json:"dirtyReadPaths"`
-	Status         LabStatus          `json:"status"`
-	LastUpdatedAt  int64              `json:"lastUpdatedAt"`
-	ProgressLogs   []LabProgressEntry `json:"progressLogs"`
-	Tests          []LabTestResult    `json:"tests"`
+	LabID            string                  `json:"labId"`
+	CreatedAt        int64                   `json:"createdAt"`
+	Language         string                  `json:"language"`
+	ActiveCheckpoint int                     `json:"activeCheckpoint"`
+	DirtyReadPaths   []string                `json:"dirtyReadPaths"`
+	Status           LabStatus               `json:"status"`
+	LastUpdatedAt    int64                   `json:"lastUpdatedAt"`
+	ProgressLogs     []LabProgressEntry      `json:"progressLogs"`
+	TestResults      []DevsArenaRunnerResult `json:"testResults"`
 }
 
 type LabMonitoringEntry struct {
@@ -179,17 +172,8 @@ func UpdateLabMonitorQueue(labID string) {
 	log.Printf("Lab %s not found in monitor queue, skipping update", labID)
 }
 
-// StoreInRedis stores a key-value pair in Redis
-func StoreInRedis(key, value string) error {
-	if RedisClient == nil {
-		return fmt.Errorf("redis client not initialized")
-	}
-
-	return RedisClient.Set(Context, key, value, 0).Err()
-}
-
 // StoreTestResultInLab stores a test result in the lab instance
-func StoreTestResultInLab(labID string, testResult LabTestResult) error {
+func StoreTestResultInLab(labID string, testResults DevsArenaRunnerFinal) error {
 	if RedisClient == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
@@ -209,26 +193,21 @@ func StoreTestResultInLab(labID string, testResult LabTestResult) error {
 	}
 
 	// Initialize tests array if nil
-	if instance.Tests == nil {
-		instance.Tests = []LabTestResult{}
+	if instance.TestResults == nil {
+		instance.TestResults = []DevsArenaRunnerResult{}
 	}
 
-	// Check if test result already exists for this checkpoint
-	found := false
-	for i, existingTest := range instance.Tests {
-		if existingTest.CheckpointID == testResult.CheckpointID {
-			// Update existing test result
-			instance.Tests[i] = testResult
-			found = true
-			break
-		}
+	testResult := testResults.Results[len(testResults.Results)-1]
+
+	for _, result := range testResults.Results {
+		instance.TestResults = append(instance.TestResults, result)
 	}
 
-	// If not found, append new test result
-	if !found {
-		instance.Tests = append(instance.Tests, testResult)
-	}
+	instance.ActiveCheckpoint = testResult.Checkpoint
 
+	if testResult.Status == TestPassed {
+		instance.ActiveCheckpoint++
+	}
 	// Update last updated timestamp
 	instance.LastUpdatedAt = time.Now().Unix()
 
@@ -245,6 +224,6 @@ func StoreTestResultInLab(labID string, testResult LabTestResult) error {
 		return err
 	}
 
-	log.Printf("Test result stored for lab %s, checkpoint %s", labID, testResult.CheckpointID)
+	log.Printf("Test result stored for lab %s, checkpoint %d", labID, testResult.Checkpoint)
 	return nil
 }

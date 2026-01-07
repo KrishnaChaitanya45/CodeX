@@ -47,23 +47,36 @@ func (s *service) GetAllQuests() ([]QuestMeta, error) {
 func (s *service) GetQuestBySlug(slug string) (*Quest, error) {
 	var quest Quest
 
-	// preload all relevant associations for a full quest view
 	err := s.db.
 		Preload("Category").
 		Preload("TechStack").
 		Preload("Topics").
 		Preload("Difficulty").
 		Preload("FinalTestCases").
-		Preload("Checkpoints").
-		Preload("Checkpoints.Testcases").
-		Preload("Checkpoints.Topics").
-		Preload("Checkpoints.Hints").
-		Preload("Checkpoints.Resources").
 		First(&quest, "slug = ?", slug).Error
+
 	if err != nil {
 		return nil, err
 	}
 
+	var checkpoints []Checkpoint
+	err = s.db.
+		Where("quest_id = ?", quest.ID).
+		Order("order_index IS NULL ASC").
+		Order("order_index ASC").
+		Order("created_at ASC").
+		Order("id ASC").
+		Preload("Testcases").
+		Preload("Topics").
+		Preload("Hints").
+		Preload("Resources").
+		Find(&checkpoints).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	quest.Checkpoints = checkpoints
 	return &quest, nil
 }
 
@@ -74,7 +87,10 @@ func (s *service) GetAllCheckpointsForQuest(questID string) ([]Checkpoint, error
 	if err != nil {
 		return nil, err
 	}
-	err = s.db.Where("quest_id = ?", uid).Find(&checkpoints).Error
+	err = s.db.Where("quest_id = ?", uid).Order("order_index IS NULL ASC").
+		Order("order_index ASC").
+		Order("created_at ASC").
+		Order("id ASC").Find(&checkpoints).Error
 	return checkpoints, err
 }
 
@@ -269,13 +285,15 @@ func (s *service) AddQuest(req AddQuestRequest) (string, error) {
 	}
 
 	// Create checkpoints
-	for _, cp := range req.Checkpoints {
+	for i, cp := range req.Checkpoints {
+		order := i + 1
 		checkpoint := Checkpoint{
 			ID:              uuid.New(),
 			Title:           cp.Title,
 			Description:     cp.Description,
 			Requirements:    pq.StringArray(cp.Requirements),
 			TestingCode:     cp.TestFileUrl,
+			OrderIndex:      &order,
 			BoilerPlateCode: "", // Empty for now
 			QuestID:         questID,
 			CreatedAt:       time.Now(),

@@ -9,7 +9,7 @@ export async function GET(
   const backendUrl = process.env.BACKEND_API_URL ?? 'http://localhost:8080';
 	
   const response = await fetch(
-    `${backendUrl}/v1/experimental/quest/${questSlug}/checkpoints`,
+    `${backendUrl}/v0/quest/${questSlug}/checkpoints`,
       {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
