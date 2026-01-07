@@ -90,10 +90,10 @@ export default function ExperimentalProjectPage() {
   const [questMetadata, setQuestMetadata] = useState<QuestMetadata | null>(null);
   const [loadingQuestData, setLoadingQuestData] = useState(false);
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
-  const [loadingTestResults, setLoadingTestResults] = useState(false);
-  const [currentTestingCheckpoint, setCurrentTestingCheckpoint] = useState<string | null>(null);
 
   const savingFiles = useRef<Set<string>>(new Set());
+  // Terminal handle to send visible commands (npm install, npm run dev)
+  const terminalHandleRef = useRef<any>(null);
 
   const bootstrapHasFiles = Object.keys(bootstrap.fileTree).length > 0;
   const mergedIsReady = bootstrap.fsReady && bootstrapHasFiles;
@@ -160,29 +160,6 @@ export default function ExperimentalProjectPage() {
     };
 
     fetchQuestData();
-  }, [labId]);
-
-  // Fetch test results
-  useEffect(() => {
-    const fetchTestResults = async () => {
-      if (!labId) return;
-      
-      setLoadingTestResults(true);
-      try {
-        const response = await fetch(`/api/v1/test-results/${labId}`);
-        if (response.ok) {
-          const data = await response.json();
-          // Test results are now managed by bootstrap hook
-          // setTestResults(data.results || {});
-        }
-      } catch (error) {
-        console.error('Error fetching test results:', error);
-      } finally {
-        setLoadingTestResults(false);
-      }
-    };
-
-    fetchTestResults();
   }, [labId]);
 
   useEffect(() => {
@@ -566,8 +543,8 @@ export default function ExperimentalProjectPage() {
       // Run test using the bootstrap hook
       await bootstrap.runCheckpointTest(checkpointId, language);
 
-      // Check results and log them
-      const results = bootstrap.testResults[checkpointId];
+      // Check results and log them (find latest for this checkpoint)
+      const results = bootstrap.testResults.find(r => `${r.checkpoint}` === checkpointId);
       console.log('Test results:', results);
       if (results) {
         const statusMessage = results.passed 
@@ -581,34 +558,36 @@ export default function ExperimentalProjectPage() {
         }]);
 
         // Show duration if available
-        if (results.DurationMs) {
+        const duration = (results as any).durationMs ?? (results as any).DurationMs;
+        if (duration) {
           setConsoleLogs(prev => [...prev, {
             type: 'info',
-            message: `⏱️ Completed in ${results.DurationMs}ms`,
+            message: `⏱️ Completed in ${duration}ms`,
             timestamp: new Date()
           }]);
         }
 
         // Show error details if test failed
-        if (!results.passed && results.Error) {
-          if (results.Error.Scenario) {
+        const normalizedError = (results as any).error || (results as any).Error;
+        if (!results.passed && normalizedError) {
+          if (normalizedError.scenario || normalizedError.Scenario) {
             setConsoleLogs(prev => [...prev, {
               type: 'error',
-              message: `  Test: ${results.Error.Scenario}`,
+              message: `  Test: ${normalizedError.scenario || normalizedError.Scenario}`,
               timestamp: new Date()
             }]);
           }
-          if (results.Error.Message) {
+          if (normalizedError.message || normalizedError.Message) {
             setConsoleLogs(prev => [...prev, {
               type: 'error',
-              message: `  Error: ${results.Error.Message}`,
+              message: `  Error: ${normalizedError.message || normalizedError.Message}`,
               timestamp: new Date()
             }]);
           }
-          if (results.Error.Hint) {
+          if (normalizedError.hint || normalizedError.Hint) {
             setConsoleLogs(prev => [...prev, {
               type: 'info',
-              message: `  💡 Hint: ${results.Error.Hint}`,
+              message: `  💡 Hint: ${normalizedError.hint || normalizedError.Hint}`,
               timestamp: new Date()
             }]);
           }
@@ -648,16 +627,32 @@ export default function ExperimentalProjectPage() {
     setConsoleLogs(prev => [...prev, { type: 'info', message: 'Starting project...', timestamp: new Date() }]);
 
     try {
-      // Use sendRunCommand for better reliability
-      const initCommands = currentPlaygroundOption?.initCommand ? [currentPlaygroundOption.initCommand] : [];
-      const runCommand = startList.join(' && ');
-      
-      setConsoleLogs(prev => [...prev, { type: 'info', message: `Exec: ${runCommand}`, timestamp: new Date() }]);
-      console.log("EXECUTING RUN COMMAND", { initCommands, runCommand });
-      
-      bootstrap.sendPtyRunCommand(initCommands, runCommand);
-      
-      setConsoleLogs(prev => [...prev, { type: 'success', message: 'Commands sent. Waiting for server output...', timestamp: new Date() }]);
+      if (!terminalHandleRef.current) {
+        setConsoleLogs(prev => [...prev, { type: 'error', message: 'Terminal not ready yet', timestamp: new Date() }]);
+        setIsRunning(false);
+        return;
+      }
+
+      // If node_modules missing and initCommand exists, run it first
+      const hasNodeModules = !!bootstrap.fileTree['node_modules'];
+      const needsInit = currentPlaygroundOption?.initCommand && !hasNodeModules;
+
+      if (needsInit) {
+        const initCmd = currentPlaygroundOption!.initCommand as string;
+        setConsoleLogs(prev => [...prev, { type: 'info', message: `Init: ${initCmd}`, timestamp: new Date() }]);
+        terminalHandleRef.current.executeCommand(initCmd);
+        // small delay to let install output start; not blocking on completion
+        await new Promise(r => setTimeout(r, 800));
+      }
+
+      for (const cmd of startList) {
+        setConsoleLogs(prev => [...prev, { type: 'info', message: `Exec: ${cmd}`, timestamp: new Date() }]);
+        terminalHandleRef.current.executeCommand(cmd);
+        // brief spacing between commands
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      setConsoleLogs(prev => [...prev, { type: 'success', message: 'Startup commands sent. Waiting for server output...', timestamp: new Date() }]);
       // Fallback: auto-clear running after 5 minutes if no manual stop (avoid stuck state)
       setTimeout(() => {
         setIsRunning(current => current && lastRunCommandRef.current === primary ? false : current);
@@ -667,7 +662,7 @@ export default function ExperimentalProjectPage() {
       setIsRunning(false);
       return;
     }
-  }, [currentPlaygroundOption, bootstrap.sendPtyRunCommand, isRunning]);
+  }, [currentPlaygroundOption, bootstrap.fileTree, isRunning]);
 
   if (!loadingDone && !mergedIsReady) {
     return (
@@ -769,18 +764,18 @@ export default function ExperimentalProjectPage() {
             jsContent={getCurrentFileContent('script.js')}
             language={language}
             labId={labId}
-            startCommands={currentPlaygroundOption?.startCommands}
+            startCommands={currentPlaygroundOption ? [ ...(currentPlaygroundOption?.initCommand ? [currentPlaygroundOption.initCommand] : []), ...(currentPlaygroundOption.startCommands || [])].filter(Boolean) : []}
             questMetadata={questMetadata}
             loadingQuestData={loadingQuestData}
             checkpoints={checkpoints}
             testResults={bootstrap.testResults}
-            loadingTestResults={loadingTestResults}
             isRunningTests={bootstrap.isRunningTests}
             currentTestingCheckpoint={bootstrap.currentTestingCheckpoint}
             params={{
               language,
               labId
             }}
+            onTerminalReady={(handle) => { terminalHandleRef.current = handle; }}
           />
         </ResizablePanel>
       </div>

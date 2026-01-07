@@ -17,6 +17,28 @@ import { buildFsUrl } from '@/lib/fs';
 import { buildPtyUrl } from '@/lib/pty';
 import { dlog, isDebug } from '../utils/debug';
 
+type RunnerCheckpointResult = {
+  checkpoint: number;
+  status?: string;
+  durationMs?: number;
+  error?: any;
+};
+
+type NormalizedCheckpointResult = {
+  checkpoint: string;
+  passed: boolean;
+  status: string;
+  durationMs?: number;
+  error?: {
+    scenario?: string;
+    expected?: string;
+    received?: string;
+    hint?: string;
+    message?: string;
+  } | null;
+  output?: string;
+};
+
 // Simple file tree builder (duplicated trimmed version to avoid importing large hook)
 const buildFileTree = (files: FileInfo[]) => {
   const tree: any = {};
@@ -105,7 +127,8 @@ export function useLabBootstrap({
   const [maxLabsReached, setMaxLabsReached] = useState(false);
   const [currentCheckpoint, setCurrentCheckpoint] = useState<number>(0);
   const [isRunningTests, setIsRunningTests] = useState(false);
-  const [testResults, setTestResults] = useState<Record<string, any>>({});
+  // Append-only chronological list of checkpoint results (may contain multiple runs)
+  const [testResults, setTestResults] = useState<NormalizedCheckpointResult[]>([]);
   const [testWsConnection, setTestWsConnection] = useState<WebSocket | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [currentTestingCheckpoint, setCurrentTestingCheckpoint] = useState<string | null>(null);
@@ -145,14 +168,25 @@ export function useLabBootstrap({
         setStatus(data.status);
         setProgressLogs(data.progressLogs || []);
         
-        // Load test results and active checkpoint from Redis
+        // Load test results + active checkpoint from Redis (via progress API)
         if (data.testResults) {
+          // New backend: array; legacy: object map
+          if (Array.isArray(data.testResults)) {
           setTestResults(data.testResults);
+          } else {
+            setTestResults(Object.values(data.testResults || {}));
+          }
         }
-        if (data.activeCheckpoint) {
+
+        if (data.activeCheckpoint !== undefined && data.activeCheckpoint !== null) {
+          // New backend: number = next checkpoint to attempt; UI tracks last passed checkpoint
+          if (typeof data.activeCheckpoint === 'number') {
+            setCurrentCheckpoint(Math.max(0, data.activeCheckpoint - 1));
+          } else if (typeof data.activeCheckpoint === 'string') {
           const checkpointNum = parseInt(data.activeCheckpoint.replace('checkpoint_', ''));
           if (!isNaN(checkpointNum)) {
             setCurrentCheckpoint(checkpointNum);
+            }
           }
         }
         
@@ -417,35 +451,10 @@ export function useLabBootstrap({
     }
   }, [ptyUrl, ptyReady, requirePtyForReady, fsReady]);
 
-    const updateTestResults = useCallback(async (checkpointId: string, results: any) => {
-    setTestResults(prev => {
-      const updated = { ...prev, [checkpointId]: results };
-      
-      // Check if current checkpoint test passed and advance if needed
-      const checkpointNum = parseInt(checkpointId);
-      if (results.passed && checkpointNum === currentCheckpoint + 1) {
-        setCurrentCheckpoint(checkpointNum);
-      }
-      
-      return updated;
-    });
-    
-    // Save to Redis via API
-    try {
-      await fetch('/api/project/test-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          labId,
-          checkpointId,
-          testResult: results
-        })
-      });
-      dlog(`Test results saved to Redis for checkpoint ${checkpointId}`);
-    } catch (error) {
-      console.error('Failed to save test results to Redis:', error);
-    }
-  }, [currentCheckpoint, labId]);
+  const appendTestResults = useCallback((results: NormalizedCheckpointResult[]) => {
+    if (!results.length) return;
+    setTestResults(prev => [...prev, ...results]);
+  }, []);
 
 
   const handlePtyMessage = useCallback((message: any) => {
@@ -468,21 +477,39 @@ export function useLabBootstrap({
         
 
         if (result && result.results && Array.isArray(result.results)) {
-          result.results.forEach((checkpointResult: any) => {
+          const normalized: NormalizedCheckpointResult[] = result.results.map((checkpointResult: any) => {
             const checkpointId = `${checkpointResult.checkpoint}`;
-            const passed = checkpointResult.status === 'PASSED';
+
+            // Normalize status to handle new server payloads (e.g., FAILED_ASSERTION)
+            const rawStatus = checkpointResult.status || '';
+            const normalizedStatus = rawStatus.toString().toLowerCase();
+            const passed = checkpointResult.passed ?? (normalizedStatus === 'passed' || normalizedStatus === 'success');
             
-            const transformedResult = {
+            const errorPayload = checkpointResult.error || checkpointResult.Error || null;
+            return {
+              checkpoint: checkpointId,
               passed,
-              status: checkpointResult.status,
-              DurationMs: checkpointResult.durationMs,
-              Error: checkpointResult.error || null,
+              status: rawStatus,
+              durationMs: checkpointResult.durationMs ?? checkpointResult.DurationMs,
+              error: errorPayload
+                ? {
+                    scenario: errorPayload.scenario || errorPayload.Scenario,
+                    expected: errorPayload.expected || errorPayload.Expected,
+                    received: errorPayload.received || errorPayload.Received,
+                    hint: errorPayload.hint || errorPayload.Hint,
+                    message: errorPayload.message || errorPayload.Message,
+                  }
+                : null,
               output: passed ? `Checkpoint ${checkpointResult.checkpoint} passed successfully!` : undefined,
-              error: checkpointResult.error?.message || undefined
             };
-            
-            updateTestResults(checkpointId, transformedResult);
           });
+            
+          appendTestResults(normalized);
+
+          // Update current checkpoint based on the activeCheckpoint coming from PTY response
+          if (typeof result.activeCheckpoint === 'number') {
+            setCurrentCheckpoint(Math.max(0, result.activeCheckpoint - 1));
+          }
         }
         
         // Resolve the test promise
@@ -514,7 +541,7 @@ export function useLabBootstrap({
         // Handle other PTY messages (terminal output, etc.)
         break;
     }
-  }, [updateTestResults]);
+  }, [appendTestResults]);
 
   // Test execution functionality using PTY connection
   const runCheckpointTest = useCallback(async (checkpointId: string, language: string): Promise<void> => {
@@ -561,25 +588,20 @@ export function useLabBootstrap({
       const response = await fetch(`/api/v1/test-results/${labId}`);
       if (response.ok) {
         const data = await response.json();
-        const results = data.results || {};
-        setTestResults(results);
+        const raw = data.testResults ?? [];
+        const normalized = Array.isArray(raw) ? raw : [];
+        setTestResults(normalized);
         
-        // Calculate current checkpoint based on passed tests
-        let maxPassedCheckpoint = 0;
-        Object.entries(results).forEach(([checkpointId, result]: [string, any]) => {
-          if (result.passed) {
-            const checkpointNum = parseInt(checkpointId.replace('checkpoint_', ''));
-            maxPassedCheckpoint = Math.max(maxPassedCheckpoint, checkpointNum);
-          }
-        });
-        setCurrentCheckpoint(maxPassedCheckpoint);
-        
-        return results;
+
+        if (typeof data.activeCheckpoint === 'number') {
+          setCurrentCheckpoint(data.activeCheckpoint);
+        }
+        return normalized;
       }
-      return {};
+      return [];
     } catch (error) {
       console.error('Failed to fetch test results:', error);
-      return {};
+      return [];
     }
   }, [labId]);
 

@@ -3,8 +3,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, RotateCcw } from 'lucide-react';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
-import { TerminalTabs, TerminalHandle } from './TerminalTabs';
-
+import { TerminalTabs } from './TerminalTabs';
+import type { TerminalHandle } from './Terminal';
 interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
   message: string;

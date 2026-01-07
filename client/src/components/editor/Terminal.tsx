@@ -12,6 +12,8 @@ export interface TerminalHandle {
   focus: () => void;
   /** Force a fit recalculation */
   forceFit: () => void;
+  /** Execute a command by typing it in the terminal */
+  executeCommand: (cmd: string) => void;
 }
 
 const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; terminalId?: string; isVisible?: boolean }>(({ params, terminalId, isVisible = true }, ref) => {
@@ -433,6 +435,27 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
     createSocketRef.current?.();
   }, []);
 
+  // Execute a command by simulating user typing
+  const executeCommand = useCallback((cmd: string) => {
+    const term = terminalInstanceRef.current;
+    if (!term) return;
+
+    // Simulate typing the command character by character (for visibility)
+    // Then send enter key
+    for (const char of cmd) {
+      const data = JSON.stringify({ type: 'input', data: char });
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(data);
+      }
+    }
+    
+    // Send the enter key to execute the command
+    const enterData = JSON.stringify({ type: 'input', data: '\r' });
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(enterData);
+    }
+  }, []);
+
   // Expose terminal commands through ref
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -445,8 +468,9 @@ const TerminalComponent = forwardRef<TerminalHandle, { params: ProjectParams; te
       try {
         fitAddonRef.current?.fit?.();
       } catch {}
-    }
-  }), []);
+    },
+    executeCommand
+  }), [executeCommand]);
 
   return (
     <div className="w-full h-full flex flex-col bg-black relative">

@@ -9,7 +9,7 @@ import FileExplorer from '@/components/editor/FileExplorer';
 import { CodeEditor } from '@/components/editor/CodeEditor';
 import { PreviewPanel } from '@/components/editor/PreviewPanel';
 import { TerminalPanel } from '@/components/editor/TerminalPanel';
-import { TerminalHandle } from '@/components/editor/TerminalTabs';
+import type { TerminalHandle } from '@/components/editor/Terminal';
 import ProgressIndicator from '@/components/editor/ProgressIndicator';
 import { LoadingScreen } from '@/components/editor/LoadingScreen';
 import { MaxLabsModal } from '@/components/editor/MaxLabsModal';
@@ -466,7 +466,7 @@ export default function V1ProjectPage() {
                 cssContent={getCurrentFileContent('src/styles.css') || ''}
                 jsContent={getCurrentFileContent('src/script.js') || ''}
                 params={{ language, labId }}
-                startCommands={currentPlaygroundOption?.startCommands}
+                startCommands={currentPlaygroundOption ? [ ...(currentPlaygroundOption?.initCommand ? [currentPlaygroundOption.initCommand] : []), ...(currentPlaygroundOption.startCommands || [])].filter(Boolean) : []}
               />
             </Panel>
 

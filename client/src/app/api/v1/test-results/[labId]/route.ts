@@ -1,30 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from 'redis';
+
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ labId: string }> }
 ) {
   try {
-  const { labId } = await params;
-  const backendUrl = process.env.BACKEND_API_URL ?? 'http://localhost:8080';
+    const { labId } = await params;
     
-    const response = await fetch(
-      `${backendUrl}/v1/test-results/${labId}`,
-      {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-
-    if (!response.ok) {
+    if (!labId) {
       return NextResponse.json(
-        { error: 'Failed to fetch test results' },
-        { status: response.status }
+        { error: 'labId is required' },
+        { status: 400 }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    // Create Redis client
+    const client = createClient({ url: REDIS_URL });
+
+    try {
+      await client.connect();
+
+      // Get lab instance from Redis hash map
+      const labData = await client.hGet('lab_instances', labId);
+
+      if (!labData) {
+        return NextResponse.json(
+          { error: 'Lab not found', testResults: [], activeCheckpoint: null },
+          { status: 404 }
+        );
+      }
+
+      // Parse the lab instance
+      const labInstance = JSON.parse(labData);
+
+      // Get test results and active checkpoint
+      const testResults = labInstance.testResults ?? labInstance.TestResults ?? [];
+      const activeCheckpoint = labInstance.activeCheckpoint ?? labInstance.ActiveCheckpoint ?? null;
+
+      return NextResponse.json({
+        testResults,
+        activeCheckpoint,
+        language: labInstance.language || labInstance.Language || 'unknown',
+        status: labInstance.status || labInstance.Status || 'unknown'
+      });
+
+    } catch (redisError) {
+      console.error('Redis error:', redisError);
+      return NextResponse.json(
+        { error: 'Redis connection failed', testResults: [], activeCheckpoint: null },
+        { status: 500 }
+      );
+    } finally {
+      await client.disconnect();
+    }
     
   } catch (error) {
     return NextResponse.json(

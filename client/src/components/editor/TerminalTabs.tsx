@@ -4,13 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, Plus, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
+// Import the exact TerminalHandle type from Terminal to avoid ref incompatibility
+import type { TerminalHandle } from './Terminal';
 
 const XTerminal = dynamic(() => import("./Terminal"), { ssr: false });
-
-export interface TerminalHandle {
-  focus: () => void;
-  forceFit: () => void;
-}
 
 interface TerminalTab {
   id: string;
