@@ -773,6 +773,7 @@ export default function ExperimentalProjectPage() {
             checkpoints={checkpoints}
             testResults={bootstrap.testResults}
             isRunningTests={bootstrap.isRunningTests}
+            activeCheckpoint={bootstrap.currentCheckpoint}
             currentTestingCheckpoint={bootstrap.currentTestingCheckpoint}
             params={{
               language,

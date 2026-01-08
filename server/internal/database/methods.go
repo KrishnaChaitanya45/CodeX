@@ -65,7 +65,6 @@ func (s *service) GetQuestBySlug(slug string) (*Quest, error) {
 		Order("order_index IS NULL ASC").
 		Order("order_index ASC").
 		Order("created_at ASC").
-		Order("id ASC").
 		Preload("Testcases").
 		Preload("Topics").
 		Preload("Hints").
@@ -89,8 +88,7 @@ func (s *service) GetAllCheckpointsForQuest(questID string) ([]Checkpoint, error
 	}
 	err = s.db.Where("quest_id = ?", uid).Order("order_index IS NULL ASC").
 		Order("order_index ASC").
-		Order("created_at ASC").
-		Order("id ASC").Find(&checkpoints).Error
+		Order("created_at ASC").Find(&checkpoints).Error
 	return checkpoints, err
 }
 

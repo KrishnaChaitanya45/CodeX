@@ -38,7 +38,7 @@ export async function GET(
 
       // Get test results and active checkpoint
       const testResults = labInstance.testResults ?? labInstance.TestResults ?? [];
-      const activeCheckpoint = labInstance.activeCheckpoint ?? labInstance.ActiveCheckpoint ?? null;
+      const activeCheckpoint = labInstance.activeCheckpoint ?? labInstance.ActiveCheckpoint ?? 1;
 
       return NextResponse.json({
         testResults,

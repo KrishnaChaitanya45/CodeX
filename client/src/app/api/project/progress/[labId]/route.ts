@@ -32,22 +32,22 @@ export async function GET(
       const labInstance = JSON.parse(labData)
 
       // Get the latest progress logs
-      const progressLogs = labInstance.progressLogs || []
+      const progressLogs = labInstance.progressLogs || labInstance.ProgressLogs || []
       
       // Get test results and active checkpoint
-      const testResults = labInstance.testResults || {}
-      const activeCheckpoint = labInstance.activeCheckpoint || null
+      const testResults = labInstance.testResults  || labInstance.TestResults || []
+      const activeCheckpoint = labInstance.activeCheckpoint || labInstance.ActiveCheckpoint || 1
 
       // Get the current status
-      const currentStatus = labInstance.status || 'unknown'
+      const currentStatus = labInstance.status ||  labInstance.Status || 'unknown'
       return NextResponse.json({
         exists: true,
         labId,
         status: currentStatus,
-        lastUpdated: labInstance.lastUpdatedAt || 0,
-        createdAt: labInstance.createdAt || 0,
+        lastUpdated: labInstance.lastUpdatedAt || labInstance.LastUpdatedAt || 0,
+        createdAt: labInstance.createdAt || labInstance.CreatedAt || 0,
         progressLogs,
-        language: labInstance.language || 'unknown',
+        language: labInstance.language || labInstance.Language || 'unknown',
         testResults,
         activeCheckpoint
       })

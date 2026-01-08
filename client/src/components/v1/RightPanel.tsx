@@ -98,6 +98,7 @@ interface RightPanelProps {
   loadingTestResults?: boolean;
   isRunningTests?: boolean;
   currentTestingCheckpoint?: string | null;
+  activeCheckpoint?: number | null;
   // Props for terminal
   params?: {
     language: string;
@@ -156,7 +157,7 @@ const CheckpointComponent: React.FC<CheckpointComponentProps> = ({
   return (
     <div key={checkpoint.id || index} className={`relative overflow-hidden rounded-2xl shadow-lg transition-all duration-300 border-2 ${
       isCurrentlyTesting ? 'border-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 scale-105' : 
-      status === 'passed' ? 'border-green-300 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' :
+      (status === 'passed' || status === "completed") ? 'border-green-300 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' :
       status === 'failed' ? 'border-red-300 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20' :
       'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
     }`}>
@@ -169,13 +170,13 @@ const CheckpointComponent: React.FC<CheckpointComponentProps> = ({
         <div className="flex items-center space-x-4">
           <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 ${
             isCurrentlyTesting ? 'bg-gradient-to-br from-blue-500 to-indigo-500 animate-pulse' :
-            status === 'passed' ? 'bg-gradient-to-br from-green-500 to-emerald-500' :
+            (status === 'passed' || status === "completed") ? 'bg-gradient-to-br from-green-500 to-emerald-500' :
             status === 'failed' ? 'bg-gradient-to-br from-red-500 to-rose-500' :
             'bg-gradient-to-br from-gray-400 to-gray-500'
           }`}>
             {isCurrentlyTesting ? (
               <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : status === 'passed' ? (
+            ) : (status === 'passed' || status === "completed") ? (
               <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
@@ -195,7 +196,7 @@ const CheckpointComponent: React.FC<CheckpointComponentProps> = ({
               <div className="flex items-center space-x-3">
                 <span className={`px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wide transition-all ${
                   isCurrentlyTesting ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse' :
-                  status === 'passed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  (status === 'passed' || status === "completed") ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                   status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
                   'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                 }`}>
@@ -375,7 +376,8 @@ const TabContent = {
   instructions: {
     title: 'Instructions',
     render: (props: RightPanelProps) => {
-      const firstIncompleteIndex = props.checkpoints ? props.checkpoints.findIndex(cp => cp.status !== 'completed') : -1;
+
+      const reversedTestResults = props.testResults?.toReversed()
       return (
       <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-slate-900 dark:to-gray-800">
         {props.loadingQuestData ? (
@@ -477,9 +479,7 @@ const TabContent = {
                   <div className="text-right">
                     <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                       {(() => {
-                        // Count passed checkpoints from testResults
-                        const passedCount = props.testResults?.filter(r => r.passed || r.status === 'passed').length || 0;
-                        return `${passedCount}/${props.checkpoints.length}`;
+                        return `${(props.activeCheckpoint ?? 1) - 1}/${props.checkpoints.length}`
                       })()}
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">Completed</div>
@@ -491,16 +491,14 @@ const TabContent = {
                   <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
                     <span>Overall Progress</span>
                     <span>{(() => {
-                      const passedCount = props.testResults?.filter(r => r.passed || r.status === 'passed').length || 0;
-                      return Math.round((passedCount / props.checkpoints.length) * 100);
+                      return Math.round(((props.activeCheckpoint ?? 1) - 1) / props.checkpoints.length * 100);
                     })()}%</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                     <div 
                       className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500"
                       style={{ width: `${(() => {
-                        const passedCount = props.testResults?.filter(r => r.passed || r.status === 'passed').length || 0;
-                        return (passedCount / props.checkpoints.length) * 100;
+                         return Math.round(((props.activeCheckpoint ?? 1) - 1) / props.checkpoints.length * 100)
                       })()}%` }}
                     ></div>
                   </div>
@@ -525,25 +523,22 @@ const TabContent = {
                 {props.checkpoints.map((checkpoint, index) => {
                   // Find test result for this checkpoint by matching checkpoint number
                   const checkpointNum = index + 1;
-                  const testResult = props.testResults?.find(r => 
-                    r.checkpoint === `${checkpointNum}` || 
-                    r.checkpoint === checkpoint.id ||
-                    r.checkpoint === checkpoint.checkpoint_number
-                  );
-                  
+                  const testResult = reversedTestResults?.find(c => Number(c.checkpoint) === checkpointNum)
+                  let testStatus = "pending"
+                  if(testResult){
+                    testStatus = testResult.status ? testResult.status.toLowerCase(): "pending"
+                  } 
                   return (
                     <CheckpointComponent 
                       key={checkpoint.id || index}
                       checkpoint={{
                         ...checkpoint,
                         // Derive status from test results if available
-                        status: testResult 
-                          ? (testResult.passed || testResult.status === 'passed' ? 'completed' : 'failed')
-                          : 'pending'
+                        status: testStatus
                       }}
                       index={index}
                       hideTestDetails
-                      isFirstIncomplete={index === firstIncompleteIndex}
+                      isFirstIncomplete={index ===  (props.activeCheckpoint ?? 1) - 1}
                     />
                   );
                 })}
@@ -1117,7 +1112,6 @@ export const RightPanel = React.memo(({
 }: RightPanelProps) => {
   const terminalHandleRef = React.useRef<any>(null);
 
-  // Notify parent when terminal is ready
   React.useEffect(() => {
     if (onTerminalReady && terminalHandleRef.current) {
       onTerminalReady(terminalHandleRef.current);
