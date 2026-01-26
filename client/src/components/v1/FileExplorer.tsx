@@ -30,6 +30,7 @@ interface FileExplorerProps {
   onFileDelete: (path: string) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
   isLoading: boolean;
+  showDirtyIndicators?: boolean;
 }
 
 const FileItem: React.FC<{
@@ -46,6 +47,7 @@ const FileItem: React.FC<{
   onFileCreate: (path: string, isDirectory: boolean) => void;
   onFileDelete: (path: string) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
+  showDirtyIndicators: boolean;
 }> = ({
   name,
   path,
@@ -59,7 +61,8 @@ const FileItem: React.FC<{
   onToggle,
   onFileCreate,
   onFileDelete,
-  onFileRename
+  onFileRename,
+  showDirtyIndicators
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -193,13 +196,15 @@ const getFileIcon = (fileName: string) => {
         ) : (
           <span className="flex-1 truncate">
             {name}
-            {isDirty && <FiberManualRecord
-  style={{
-    fontSize: 10,
-    color: '#f97316', 
-    marginLeft: 6,
-  }}
-/>}
+            {showDirtyIndicators && isDirty && (
+              <FiberManualRecord
+                style={{
+                  fontSize: 10,
+                  color: '#f97316',
+                  marginLeft: 6,
+                }}
+              />
+            )}
           </span>
         )}
 
@@ -288,7 +293,8 @@ const renderFileTree = (
   onFileDelete: (path: string) => void,
   onFileRename: (oldPath: string, newPath: string) => void,
   level = 0,
-  parentPath = ''
+  parentPath = '',
+  showDirtyIndicators = true
 ): React.ReactNode => {
   // Sort entries: directories first, then files, both alphabetically
   const entries = Object.entries(tree).sort(([nameA, itemA]: [string, any], [nameB, itemB]: [string, any]) => {
@@ -327,6 +333,7 @@ const renderFileTree = (
           onFileCreate={onFileCreate}
           onFileDelete={onFileDelete}
           onFileRename={onFileRename}
+          showDirtyIndicators={showDirtyIndicators}
         />
         {isDirectory && isExpanded && item.children && (
           <div>
@@ -342,7 +349,8 @@ const renderFileTree = (
               onFileDelete,
               onFileRename,
               level + 1,
-              fullPath
+              fullPath,
+              showDirtyIndicators
             )}
           </div>
         )}
@@ -362,7 +370,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onFileCreate,
   onFileDelete,
   onFileRename,
-  isLoading
+  isLoading,
+  showDirtyIndicators = true
 }) => {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
@@ -454,7 +463,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             onDirectoryToggle,
             onFileCreate,
             onFileDelete,
-            onFileRename
+            onFileRename,
+            0,
+            '',
+            showDirtyIndicators
           )
         )}
       </div>

@@ -66,6 +66,7 @@ interface CodeEditorProps {
   className?: string;
   loadingFile?: string | null;
   shouldShowTest?: boolean;
+  showDirtyIndicators?: boolean;
   // Legacy props (for backward compatibility)
   activeFileName?: string;
   fileContent?: string;
@@ -87,6 +88,7 @@ export default function CodeEditor({
   isRunningTests = false,
   currentTestingCheckpoint,
   shouldShowTest = true, 
+  showDirtyIndicators = true,
   language = 'javascript',
   className = '',
   loadingFile = null,
@@ -268,7 +270,7 @@ const getFileIcon = (fileName: string) => {
                 {loadingFile === file.path && (
                   <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-500 border-t-transparent ml-2 flex-shrink-0" />
                 )}
-                {file.isDirty && loadingFile !== file.path && (
+                {showDirtyIndicators && file.isDirty && loadingFile !== file.path && (
                   <div className="w-2 h-2 bg-orange-500 rounded-full ml-2 flex-shrink-0" />
                 )}
                 <button

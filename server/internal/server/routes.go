@@ -621,6 +621,7 @@ func (s *Server) GetExperimentalProjectsByLanguage(w http.ResponseWriter, r *htt
 	}
 
 	language = strings.ToLower(language)
+
 	log.Printf("Fetching projects for language: %s", language)
 	projects, err := s.db.GetQuestsByLanguage(language)
 	if err != nil {

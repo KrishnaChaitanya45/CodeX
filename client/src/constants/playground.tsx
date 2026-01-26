@@ -62,7 +62,7 @@ export const PLAYGROUND_OPTIONS: PlaygroundOption[] = [
   },
   {
     id: "vanilla-js",
-    isLive: false,
+    isLive: true,
     label: "HTML / CSS / JS (Vanilla)",
     language: "vanilla-js",
     info: "🎨 Classic web development. HTML, CSS, and JavaScript - the foundation of the web.",

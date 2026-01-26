@@ -2,6 +2,9 @@ package database
 
 import (
 	"fmt"
+	"lms_v0/utils"
+	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -76,6 +79,27 @@ func (s *service) GetQuestBySlug(slug string) (*Quest, error) {
 	}
 
 	quest.Checkpoints = checkpoints
+	bucketName := os.Getenv("AWS_S3_BUCKET_NAME")
+	if bucketName == "" {
+		return &quest, nil
+	}
+
+	if quest.BoilerPlateCode != "" {
+		if presigned, err := utils.GeneratePresignedUrl(bucketName, quest.BoilerPlateCode); err == nil {
+			quest.BoilerPlateCode = presigned
+		} else {
+			log.Printf("presign boilerplate: %v", err)
+		}
+	}
+	for i := range quest.Checkpoints {
+		if quest.Checkpoints[i].TestingCode != "" {
+			if presigned, err := utils.GeneratePresignedUrl(bucketName, quest.Checkpoints[i].TestingCode); err == nil {
+				quest.Checkpoints[i].TestingCode = presigned
+			} else {
+				log.Printf("presign checkpoint %s: %v", quest.Checkpoints[i].ID, err)
+			}
+		}
+	}
 	return &quest, nil
 }
 
@@ -115,8 +139,22 @@ func (s *service) GetAllTechnologies() []string {
 // GetQuestsByLanguage returns quests filtered by technology/language
 func (s *service) GetQuestsByLanguage(language string) ([]QuestMeta, error) {
 	var quests []Quest
-
+	langArray := make([]string, 0)
+	if language == "vanilla-js" {
+		langArray = append(langArray, "HTML", "CSS", "JavaScript")
+	} else {
+		langArray = append(langArray, language)
+	}
 	// Join with technology table to filter by language
+	var whereClause string
+	var args []interface{}
+	for i, lang := range langArray {
+		if i > 0 {
+			whereClause += " OR "
+		}
+		whereClause += "technologies.name = ?"
+		args = append(args, lang)
+	}
 	err := s.db.
 		Preload("Category").
 		Preload("TechStack").
@@ -124,7 +162,8 @@ func (s *service) GetQuestsByLanguage(language string) ([]QuestMeta, error) {
 		Preload("Difficulty").
 		Joins("JOIN quest_technologies ON quests.id = quest_technologies.quest_id").
 		Joins("JOIN technologies ON quest_technologies.technology_id = technologies.id").
-		Where("technologies.name = ?", language).
+		Where(whereClause, args...).
+		Group("quests.id").
 		Find(&quests).Error
 
 	if err != nil {

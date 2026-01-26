@@ -94,14 +94,14 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
 
         // 2. Bind Input
         term.onData((data) => {
+          // Only do local echo for control characters, let server handle printable chars
           if (localEchoRef.current) {
             if (data === '\r' || data === '\n') {
               term?.write('\r\n');
             } else if (data === '\x7f' || data === '\b') {
               term?.write('\b \b');
-            } else if (data >= ' ' && data <= '~') {
-              term?.write(data);
             }
+            // Removed local echo for printable characters to avoid double rendering
           }
 
           if (data === '\r' || data === '\n') {
@@ -157,9 +157,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
     focus: () => terminalRef.current?.focus(),
     forceFit: () => fitAddonRef.current?.fit(),
     write: (data: string) => {
-      if (localEchoRef.current && currentCommandRef.current && data.includes(currentCommandRef.current)) {
-        localEchoRef.current = false;
-      }
       terminalRef.current?.write(data);
     },
     clear: () => terminalRef.current?.reset(),
@@ -172,19 +169,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
       } catch {}
     }
   }, [isConnected, isTerminalReady]);
-
-  useEffect(() => {
-    if (!isConnected || !isTerminalReady) {
-      didNudgeRef.current = false;
-      return;
-    }
-    if (!didNudgeRef.current) {
-      didNudgeRef.current = true;
-      try {
-        onInput?.('\r');
-      } catch {}
-    }
-  }, [isConnected, isTerminalReady, onInput]);
 
   return (
     <div className="w-full h-full flex flex-col bg-black relative" style={{ minHeight: '300px' }}>

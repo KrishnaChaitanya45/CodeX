@@ -9,9 +9,14 @@ import {
   Globe,
   Code,
 } from "lucide-react";
+import Link from "next/link";
 import { PLAYGROUND_OPTIONS } from "@/constants/playground";
 import { MaxLabsModal } from "@/components/editor/MaxLabsModal";
 import { generateRandomLabId } from "@/utils/labIdGenerator";
+import Squares from "@/components/landing/Squares";
+import Navbar from "@/components/landing/Navbar";
+import Footer from "@/components/landing/Footer";
+import { siteContent } from "@/app/content";
 
 export default function PlaygroundPage() {
   const [loading, setLoading] = useState<string | null>(null);
@@ -20,6 +25,12 @@ export default function PlaygroundPage() {
     setLoading(id);
     try {
     const labId = generateRandomLabId();
+    if(language == "vanilla-js"){
+      setTimeout(()=>{
+        window.location.href = `/playground/js/${labId}`;
+      }, 1000);
+      return
+    }
       const res = await fetch("/api/project/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,7 +52,7 @@ export default function PlaygroundPage() {
 
       // Redirect to the project page
       setTimeout(() => {
-        window.location.href = `/v1/project/${language}/${labId}`;
+        window.location.href = `/playground/${language}/${labId}`;
       }, 1000);
     } catch (e) {
       console.error(e);
@@ -74,54 +85,33 @@ export default function PlaygroundPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex flex-col items-center p-4 sm:p-8 font-poppins relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-10 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500"></div>
-        </div>
+      <main className="relative min-h-screen text-white">
+        <Squares
+          className="pointer-events-none"
+          direction="diagonal"
+          speed={0.35}
+          borderColor="rgba(255,255,255,0.08)"
+          hoverFillColor="rgba(124,58,237,0.12)"
+          squareSize={34}
+        />
+        <Navbar />
+        <div className="relative z-10 min-h-screen  text-white flex flex-col items-center p-4 sm:p-8 pt-24 font-poppins overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute inset-0 opacity-30">
+            <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+            <div className="absolute bottom-20 right-10 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500"></div>
+          </div>
 
-        {/* Content */}
-        <div className="relative z-10 w-full max-w-6xl mx-auto">
+          {/* Content */}
+          <div className="relative z-10 w-full max-w-6xl mx-auto">
           <motion.header
             initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5 }}
-            className="flex flex-col items-center text-center mb-12"
+            className="flex flex-col items-center text-center m-12"
           >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="relative mb-6"
-            >
-              <motion.img
-                src="/logos/white.svg"
-                alt="DevsArena Logo"
-                width={80}
-                height={80}
-                className="mb-4"
-                whileHover={{ rotate: 360 }}
-                transition={{ duration: 0.6 }}
-              />
-              <motion.div
-                animate={{
-                  scale: [1, 1.1, 1],
-                  opacity: [0.5, 1, 0.5],
-                }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl"
-              />
-            </motion.div>
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="text-5xl sm:text-6xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 mb-4"
-            >
-              DevsArena Playground
-            </motion.h1>
+
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -141,6 +131,26 @@ export default function PlaygroundPage() {
               <span className="text-sm font-medium">
                 Powered by cutting-edge cloud technology
               </span>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="mt-6 flex flex-wrap items-center justify-center gap-3"
+            >
+              <Link
+                href="/projects"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10"
+              >
+                Try Guided Projects
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link
+                href="/playground"
+                className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-5 py-2.5 text-sm font-semibold text-purple-200 shadow-sm transition hover:-translate-y-0.5 hover:border-purple-400/60 hover:bg-purple-500/20"
+              >
+                Explore Playgrounds
+              </Link>
             </motion.div>
           </motion.header>
 
@@ -279,51 +289,22 @@ export default function PlaygroundPage() {
             ))}
           </motion.div>
 
-          {/* Footer */}
-          <motion.footer
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="mt-16 text-center"
-          >
-            <div className="flex items-center justify-center gap-6 text-gray-400 text-sm">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Globe className="w-4 h-4" />
-                <span>Cloud-powered</span>
-              </motion.div>
-              <div className="w-1 h-1 bg-gray-600 rounded-full"></div>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Instant setup</span>
-              </motion.div>
-              <div className="w-1 h-1 bg-gray-600 rounded-full"></div>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Code className="w-4 h-4" />
-                <span>Secure environment</span>
-              </motion.div>
-            </div>
-            <p className="mt-4 text-xs text-gray-500">
-              Copyright &copy; 2025 DevsArena. All rights reserved.
-            </p>
-          </motion.footer>
+          </div>
         </div>
-      </div>
+        <Footer
+          tagline={siteContent.footer.tagline}
+          socials={siteContent.footer.socials}
+          copyright={siteContent.footer.copyright}
+          builtBy={siteContent.footer.builtBy}
+        />
+      </main>
 
             {/* Maximum Labs Exceeded Modal */}
       <MaxLabsModal
         isOpen={showMaxLabsModal}
         onClose={() => {
           setShowMaxLabsModal(false);
-          window.location.href = '/v1/playground';
+          window.location.href = '/playground';
         }}
       />
     </>

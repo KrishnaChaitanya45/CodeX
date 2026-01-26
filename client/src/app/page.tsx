@@ -39,6 +39,7 @@ export default function Home() {
           tracksTitle={siteContent.guidedProjects.tracksTitle}
           tracks={siteContent.guidedProjects.tracks}
           illustration={<IDEIllustration />}
+          cta={{ label: "Try Guided Projects", href: "/projects" }}
         />
         <Tooling
           id="playgrounds"
@@ -46,6 +47,7 @@ export default function Home() {
           body={siteContent.playgrounds.body}
           features={siteContent.playgrounds.features}
           illustration={<TerminalIllustration />}
+          cta={{ label: "Explore Playgrounds", href: "/playground" }}
         />
         <Transparency
           id="access"

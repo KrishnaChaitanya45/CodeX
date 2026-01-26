@@ -12,20 +12,23 @@ type RunControlsProps = {
   shortcuts: KeyboardShortcuts;
   progress:CheckpointProgress[];
   isTestRunning?: boolean;
+  showRun?: boolean;
 };
 
-const RunControls: FC<RunControlsProps> = ({ onRun, onTest, progress, onPrettify, onSubmit, onSettings, shortcuts, isTestRunning = false }) => {
+const RunControls: FC<RunControlsProps> = ({ onRun, onTest, progress, onPrettify, onSubmit, onSettings, shortcuts, isTestRunning = false, showRun = true }) => {
 const isProjectComplete = progress.every(p => p.completed);
   return (
 <div className="flex items-center justify-between p-3 bg-[#2d2d30] border-t border-[#3c3c3c]">
     <div className="flex gap-3">
-      <button
-        onClick={onRun}
-        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-medium"
-        title={`Run Code (${shortcuts.run})`}
-      >
-        ▶️ Run & Test
-      </button>
+      {showRun && (
+        <button
+          onClick={onRun}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-medium"
+          title={`Run Code (${shortcuts.run})`}
+        >
+          ▶️ Run & Test
+        </button>
+      )}
       <button
         onClick={onPrettify}
         className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors font-medium"
