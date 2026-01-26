@@ -38,7 +38,7 @@ export function TerminalPanel({ logs, isRunning, onClear, params, onTerminalRead
   return (
     <div className="h-full  flex flex-col overflow-hidden">
       <div className="flex-1 overflow-hidden">
-        <TerminalTabs key={terminalKey} params={params} onTerminalReady={onTerminalReady} />
+        {/* <TerminalTabs key={terminalKey} params={params} onTerminalReady={onTerminalReady} /> */}
       </div>
     </div>
   );

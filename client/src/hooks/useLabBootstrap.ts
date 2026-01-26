@@ -129,8 +129,6 @@ export function useLabBootstrap({
   const [isRunningTests, setIsRunningTests] = useState(false);
   // Append-only chronological list of checkpoint results (may contain multiple runs)
   const [testResults, setTestResults] = useState<NormalizedCheckpointResult[]>([]);
-  const [testWsConnection, setTestWsConnection] = useState<WebSocket | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
   const [currentTestingCheckpoint, setCurrentTestingCheckpoint] = useState<string | null>(null);
   const initialFileChosen = useRef(false);
   const ptySocketRef = useRef<WebSocket | null>(null);
@@ -421,9 +419,10 @@ export function useLabBootstrap({
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          dlog("DEBUG: EXECUTING RUN COMMAND", message)
           handlePtyMessage(message);
         } catch (error) {
-          console.log('PTY output:', event.data);
+          dlog('DEBUG: PTY output:', event.data);
         }
       };
       
@@ -458,7 +457,7 @@ export function useLabBootstrap({
 
 
   const handlePtyMessage = useCallback((message: any) => {
-    console.log('PTY message received:', message);
+    dlog('DEBUG: PTY message received:', message);
     
     const testPromise = ptySocketRef.current ? (ptySocketRef.current as any).testPromise : null;
     
@@ -533,9 +532,6 @@ export function useLabBootstrap({
         }
         break;
         
-      case 'heartbeat_response':
-        // Handle heartbeat response if needed
-        break;
         
       default:
         // Handle other PTY messages (terminal output, etc.)
@@ -765,33 +761,6 @@ export function useLabBootstrap({
     return capped;
   })();
 
-  // PTY Socket utility functions
-  const sendPtyKillUserProcesses = useCallback(() => {
-    if (!ptySocketRef.current || ptySocketRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('PTY socket not connected');
-      return;
-    }
-    try {
-      ptySocketRef.current.send(JSON.stringify({ type: 'kill_user_processes' }));
-      dlog('Kill user processes command sent');
-    } catch (err) {
-      console.error('Failed to send kill command:', err);
-    }
-  }, []);
-
-  const sendPtyRunCommand = useCallback((initCommands: string[], runCommand: string) => {
-    if (!ptySocketRef.current || ptySocketRef.current.readyState !== WebSocket.OPEN) {
-      console.error('PTY socket not connected');
-      return;
-    }
-    try {
-      const payload = JSON.stringify({ initCommands, runCommand });
-      ptySocketRef.current.send(JSON.stringify({ type: 'run', data: payload }));
-      dlog('Run command sent:', { initCommands, runCommand });
-    } catch (err) {
-      console.error('Failed to send run command:', err);
-    }
-  }, []);
 
   const publicApi = {
     phase,
@@ -816,9 +785,6 @@ export function useLabBootstrap({
     metaLoaded: metaLoadedRef.current,
     apiCalls: apiCalls.current,
     maxLabsReached,
-    // PTY socket utilities
-    sendPtyKillUserProcesses,
-    sendPtyRunCommand,
     // Test execution methods
     runCheckpointTest,
     loadTestResults,

@@ -65,7 +65,7 @@ interface CodeEditorProps {
   language?: string;
   className?: string;
   loadingFile?: string | null;
-  
+  shouldShowTest?: boolean;
   // Legacy props (for backward compatibility)
   activeFileName?: string;
   fileContent?: string;
@@ -86,6 +86,7 @@ export default function CodeEditor({
   isRunning = false,
   isRunningTests = false,
   currentTestingCheckpoint,
+  shouldShowTest = true, 
   language = 'javascript',
   className = '',
   loadingFile = null,
@@ -304,7 +305,7 @@ const getFileIcon = (fileName: string) => {
                 )}
               </button>
             )}
-            {onSubmit && (
+            {onSubmit && shouldShowTest && (
               <button
                 onClick={onSubmit}
                 disabled={isRunningTests}

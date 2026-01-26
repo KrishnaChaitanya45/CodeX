@@ -141,7 +141,7 @@ spec:
 
       containers:
         - name: app-container
-          image: krishnawyvern/devsarena-node-runtime:v2.10
+          image: krishnawyvern/devsarena-node-runtime:v2.11
           ports:
 {{- if eq .Language "react" }}
             - name: vite-dev
@@ -212,7 +212,7 @@ spec:
           workingDir: /workspace
 
         - name: pty-container
-          image: krishnawyvern/devsarena-pty-relay:v2.5
+          image: krishnawyvern/devsarena-pty-relay:v2.7
           ports:
             - name: pty-ws
               containerPort: 8082

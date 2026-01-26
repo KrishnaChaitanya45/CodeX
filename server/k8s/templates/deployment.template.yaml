@@ -140,7 +140,7 @@ spec:
           workingDir: /workspace
 
         - name: pty-container
-          image: krishnawyvern/devsarena-pty-relay:v1.2
+          image: krishnawyvern/devsarena-pty-relay:v2.7
           ports:
             - name: pty-ws
               containerPort: 8082

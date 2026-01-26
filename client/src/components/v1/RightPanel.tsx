@@ -65,6 +65,7 @@ interface RightPanelProps {
   language?: string;
   labId?: string;
   startCommands?: string[];
+  previewReloadNonce?: number;
   // Quest metadata
   questMetadata?: {
     success: boolean;
@@ -105,6 +106,11 @@ interface RightPanelProps {
     labId: string;
   };
   onTerminalReady?: (terminal: any) => void;
+  isConnected?: boolean;
+  connectionError?: string | null;
+  onRetry?: () => void;
+  onInput?: (data: string) => void;
+  onResize?: (cols: number, rows: number) => void;
 }
 
 // Separate component for checkpoint to avoid hooks order issues
@@ -365,8 +371,13 @@ const TabContent = {
         <div className="h-80 min-h-[200px] bg-black">
           {props.params && (
             <TerminalComponent
-              params={props.params}
               terminalId="main"
+              labId={props.params.labId}
+              isConnected={!!props.isConnected}
+              connectionError={props.connectionError || null}
+              onRetry={props.onRetry}
+              onInput={props.onInput || (() => {})}
+              onResize={props.onResize || (() => {})}
             />
           )}
         </div>
@@ -1106,17 +1117,27 @@ export const RightPanel = React.memo(({
   language,
   labId,
   startCommands = [],
+  previewReloadNonce,
   params,
   onTerminalReady,
+  isConnected,
+  connectionError,
+  onRetry,
+  onInput,
+  onResize,
   ...props
 }: RightPanelProps) => {
   const terminalHandleRef = React.useRef<any>(null);
-
-  React.useEffect(() => {
-    if (onTerminalReady && terminalHandleRef.current) {
-      onTerminalReady(terminalHandleRef.current);
-    }
-  }, [onTerminalReady, terminalHandleRef.current]);
+  const handleTerminalRef = React.useCallback(
+    (instance: any) => {
+      if (!instance) return;
+      terminalHandleRef.current = instance;
+      if (onTerminalReady) {
+        onTerminalReady(instance);
+      }
+    },
+    [onTerminalReady]
+  );
 
   const tabs = [
     { id: 'preview' as const, label: 'Preview & Terminal', icon: EyeIcon },
@@ -1183,10 +1204,14 @@ export const RightPanel = React.memo(({
             <div className="h-80 min-h-[200px] bg-black">
               {params && (
                 <TerminalComponent
-                  ref={terminalHandleRef}
-                  params={params}
+                  ref={handleTerminalRef}
                   terminalId="main"
-                  isVisible={activeTab === 'preview'}
+                  labId={params.labId}
+                  isConnected={!!isConnected}
+                  connectionError={connectionError || null}
+                  onRetry={onRetry}
+                  onInput={onInput || (() => {})}
+                  onResize={onResize || (() => {})}
                 />
               )}
             </div>
@@ -1229,6 +1254,9 @@ export const RightPanel = React.memo(({
     prevProps.activeTab === nextProps.activeTab &&
     prevProps.params?.labId === nextProps.params?.labId &&
     prevProps.params?.language === nextProps.params?.language &&
+    prevProps.previewReloadNonce === nextProps.previewReloadNonce &&
+    prevProps.isConnected === nextProps.isConnected &&
+    prevProps.connectionError === nextProps.connectionError &&
     prevProps.isRunningTests === nextProps.isRunningTests &&
     JSON.stringify(prevProps.checkpoints) === JSON.stringify(nextProps.checkpoints) &&
     JSON.stringify(prevProps.testResults) === JSON.stringify(nextProps.testResults) &&

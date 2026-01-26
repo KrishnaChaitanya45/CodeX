@@ -1,9 +1,10 @@
 "use client";
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, Plus, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ProjectParams } from '@/constants/FS_MessageTypes';
+import { usePty } from '@/hooks/usePty';
 // Import the exact TerminalHandle type from Terminal to avoid ref incompatibility
 import type { TerminalHandle } from './Terminal';
 
@@ -16,24 +17,20 @@ interface TerminalTab {
 }
 
 interface TerminalTabsProps {
-  params: ProjectParams;
   onTerminalReady?: (terminalRef: React.RefObject<TerminalHandle | null>) => void;
+    isConnected?: boolean;
+  connectionError?: string | null;
+  onRetry?: () => void;
+  onInput?: (data: string) => void;
+  onResize?: (cols: number, rows: number) => void;
 }
 
-export function TerminalTabs({ params, onTerminalReady }: TerminalTabsProps) {
+export function TerminalTabs({ onTerminalReady, isConnected, connectionError, onRetry, onInput, onResize }: TerminalTabsProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([
     { id: '1', name: 'Terminal', isActive: true }
   ]);
   const [nextTabId, setNextTabId] = useState(2);
   const terminalRef = useRef<TerminalHandle>(null);
-
-  // Notify parent when terminal is ready
-  React.useEffect(() => {
-    if (onTerminalReady) {
-      onTerminalReady(terminalRef);
-    }
-  }, [onTerminalReady]);
-
   const activeTab = tabs.find(tab => tab.isActive);
 
   const createNewTab = useCallback(() => {
@@ -137,10 +134,12 @@ export function TerminalTabs({ params, onTerminalReady }: TerminalTabsProps) {
               className="absolute inset-0"
             >
               <XTerminal 
-                ref={terminalRef}
-                params={params} 
-                terminalId="main"
-                isVisible={true}
+                  terminalId="main"
+                  isConnected={!!isConnected}
+                  connectionError={connectionError || null}
+                  onRetry={onRetry}
+                  onInput={onInput || (() => {})}
+                  onResize={onResize || (() => {})}
               />
             </motion.div>
           )}
