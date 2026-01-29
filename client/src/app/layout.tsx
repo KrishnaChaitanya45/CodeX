@@ -51,15 +51,6 @@ export const metadata: Metadata = {
   creator: "Krishna Chaitanya Kommera",
   applicationName: "DevsArena",
 
-  icons: {
-    icon: "/logos/white.svg",
-    shortcut: "/logos/white.svg",
-
-    apple: [
-      { url: "/logos/white.svg", type: "image/svg+xml" },
-      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" }, 
-    ],
-  },
 
   alternates: { canonical: "/" },
 
@@ -132,7 +123,7 @@ export default function RootLayout({
         "@type": "Organization",
         "name": "DevsArena",
         "url": "https://devsarena.in",
-        "logo": "https://devsarena.in/logos/white.svg",
+        "logo": "https://devsarena.in/icon.svg",
         "sameAs": [
           "https://twitter.com/KrishnaWyvern",
           "https://github.com/KrishnaChaitanya45", // Update this if your GitHub username is different!
@@ -155,7 +146,6 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="icon" type="image/svg" href="/logos/white.svg" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
