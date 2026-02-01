@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward request to backend
-    const response = await fetch(`${process.env.BACKEND_API_URL}/v0/projects`, {
+    const response = await fetch(`${process.env.BACKEND_API_URL}/v0/quest/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

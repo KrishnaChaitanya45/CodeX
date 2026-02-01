@@ -14,7 +14,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (account?.provider === "github") {
         try {
         console.log("DEBUG: CALLING THE INTERNAL API WITH", user)
-          const response = await fetch(`${process.env.BACKEND_API_URL}/auth/github/sync`, {
+          const response = await fetch(`${process.env.BACKEND_API_URL}/v0/auth/github`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
