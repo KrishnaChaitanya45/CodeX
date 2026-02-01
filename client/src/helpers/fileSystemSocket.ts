@@ -33,6 +33,15 @@ class FileSystemSocket {
   private closeHandlers: Array<(ev: CloseEvent) => void> = [];
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
+  private rejectAllPending(err: Error) {
+    this.requestCallbacks.forEach(({ reject }) => {
+      try { reject(err); } catch { /* swallow */ }
+    });
+    this.requestCallbacks.clear();
+    this.pendingByType.clear();
+    this.requestIdToType.clear();
+  }
+
 async sleep (ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -134,6 +143,7 @@ async  checkIfAvailable(url: string): Promise<boolean> {
           this.isConnecting = false;
           this.connectionPromise = null;
           this.stopHeartbeat();
+          this.rejectAllPending(new Error('FS connection closed'));
           this.closeHandlers.forEach(h => {
             try { h(event); } catch { /* swallow */ }
           });
@@ -304,7 +314,7 @@ async  checkIfAvailable(url: string): Promise<boolean> {
           this.pendingByType.set(responseType, updated);
           reject(new Error("Request timeout"));
         }
-      }, 8000); // Reduced timeout for faster failures
+      }, 15000); // Reduced timeout for faster failures
 
       // replace stored resolve/reject with timeout attached so close handlers can clear it
       this.requestCallbacks.set(request_id, { resolve: (data) => { clearTimeout(timeout); resolve(data); }, reject: (err) => { clearTimeout(timeout); reject(err); } });

@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import posthog from "posthog-js";
 
 // Components
 import { ResizablePanel } from "@/components/v1/ResizablePanel";
@@ -68,6 +69,8 @@ export default function ExperimentalProjectPage() {
   // Unified bootstrap hook
   const bootstrap = useLabBootstrap({
     labId,
+    isProject: true,
+    questSlug: projectSlug,
     language,
     autoConnectPty: false,
     requirePtyForReady: false,
@@ -525,6 +528,14 @@ export default function ExperimentalProjectPage() {
         prev.map((f) => (f.path === activeFile ? { ...f, isDirty: false } : f)),
       );
 
+      // Track file save event
+      posthog.capture('file_saved', {
+        filePath: activeFile,
+        language: language,
+        projectSlug: projectSlug,
+        labId: labId,
+      });
+
       setConsoleLogs((prev) => [
         ...prev,
         {
@@ -742,6 +753,15 @@ export default function ExperimentalProjectPage() {
 
       console.log("Checkpoint ID:", checkpointId);
 
+      // Track checkpoint test submission event
+      posthog.capture('checkpoint_tests_submitted', {
+        checkpointId: checkpointId,
+        checkpointNumber: nextCheckpoint,
+        language: language,
+        projectSlug: projectSlug,
+        labId: labId,
+      });
+
       // 4. Fire Test Run (Fire-and-forget)
       // The results will come back via the `pty.testState.results` stream.
       pty.runTests(checkpointId);
@@ -790,6 +810,14 @@ export default function ExperimentalProjectPage() {
     // UI Updates
     setActiveRightTab("preview");
     lastRunCommandRef.current = primary;
+
+    // Track project run event
+    posthog.capture('project_run_clicked', {
+      language: language,
+      projectSlug: projectSlug,
+      labId: labId,
+      command: primary,
+    });
 
     // Note: pty.runStatus.isRunning will update automatically via socket events,
     // but we log immediately for UI responsiveness.

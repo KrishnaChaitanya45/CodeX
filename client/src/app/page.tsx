@@ -49,17 +49,9 @@ export default function Home() {
           illustration={<TerminalIllustration />}
           cta={{ label: "Explore Playgrounds", href: "/playground" }}
         />
-        <Transparency
-          id="access"
-          title={siteContent.access.title}
-          body={siteContent.access.body}
-          tiers={siteContent.access.tiers}
-          footerCta={siteContent.access.footerCta}
-        />
+        
         <Feedback
-          title={siteContent.feedback.title}
-          body={siteContent.feedback.subtitle}
-          options={siteContent.feedback.options}
+        content={siteContent.feedback}
         />
       </div>
       <Footer

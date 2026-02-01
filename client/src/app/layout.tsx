@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Analytics from "@/components/Analytics";
+import { Suspense } from "react";
+import { SessionProvider } from "next-auth/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -164,7 +167,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} font-sans antialiased bg-dark-900 text-white`}
       >
-        {children}
+        <SessionProvider>
+            {children}
+            <Suspense fallback={null}>
+              <Analytics />
+            </Suspense>
+        </SessionProvider>
       </body>
     </html>
   );

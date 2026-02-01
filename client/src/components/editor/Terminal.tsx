@@ -38,8 +38,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
   const isRendered = useRef(false);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const currentCommandRef = useRef('');
-  const localEchoRef = useRef(true);
+  const localEchoRef = useRef(false);
   const didNudgeRef = useRef(false);
+  const isConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+    // Disable client-side echo when disconnected to prevent phantom edits
+    localEchoRef.current = false;
+  }, [isConnected]);
 
   useEffect(() => {
     if (!containerRef.current || isRendered.current) return;
@@ -94,6 +101,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({
 
         // 2. Bind Input
         term.onData((data) => {
+          if (!isConnectedRef.current) return;
           // Only do local echo for control characters, let server handle printable chars
           if (localEchoRef.current) {
             if (data === '\r' || data === '\n') {

@@ -28,17 +28,30 @@ export type SiteContent = {
     note: string;
     footerCta: { label: string; href: string };
   };
-  feedback: {
+  login: {
+    title: string;
+    body: string;
+    highlight: string;
+    features: { title: string; description: string }[];
+    cta: { label: string; href: string };
+  };
+ feedback: {
+  badge: string;
+  heading: string;
+  description: string;
+  contribute: {
+    title: string;
+    description: string;
+    cta: { label: string; href: string };
+  };
+  form: {
     title: string;
     subtitle: string;
-    options: {
-      type: 'feedback' | 'contribute';
-      title: string;
-      description: string;
-      cta: { label: string; href: string };
-      icon: string;
-    }[];
+    placeholder: string;
+    button: { idle: string; loading: string; success: string };
+    successMessage: string;
   };
+};
   footer: {
     tagline: string;
     socials: { platform: string; url: string; icon: string }[];
@@ -135,25 +148,53 @@ export const siteContent: SiteContent = {
       "💬 Building something massive? Need higher limits? Drop us a message—we're happy to support serious builders pushing the platform.",
     footerCta: { label: "Join via GitHub", href: "/api/auth/github" },
   },
-  feedback: {
-    title: "Help Us Build Better",
-    subtitle: "Your input shapes the platform. Whether you want to share feedback or contribute code, we'd love to hear from you.",
-    options: [
+  login: {
+    title: "Join the Arena",
+    body:
+      "Unlock the full DevsArena experience with your own personalized cloud workspace. Registered members get the complete toolchain, persistent labs, and advanced project tracking.",
+    highlight: "Everything here is private to you and saved automatically.",
+    features: [
       {
-        type: 'feedback',
-        icon: "💬",
-        title: "Share Feedback",
-        description: "Found a bug? Have a feature idea? Let us know what would make your experience better.",
-        cta: { label: "Send Feedback", href: "mailto:kommerakrishnachaitanya@gmail.com?subject=Feedback" },
+        title: "Full Cloud Terminal",
+        description: "Install packages, run scripts, and debug in a real shell—no local setup required.",
       },
       {
-        type: 'contribute',
-        icon: "🛠️",
-        title: "Contribute to DevsArena",
-        description: "Help us build the platform. Contribute to our open-source codebase or submit guided project ideas.",
-        cta: { label: "View on GitHub", href: "https://github.com/KrishnaChaitanya45/codex" },
+        title: "Guided Projects & Checkpoints",
+        description: "Follow professional roadmaps and verify progress with checkpoint-based tests.",
+      },
+      {
+        title: "Persistent Playgrounds",
+        description: "Your code, dependencies, and state stay exactly as you left them.",
+      },
+      {
+        title: "Private Workspaces",
+        description: "Each lab runs in a secure, isolated environment built for serious builders.",
       },
     ],
+    cta: { label: "Continue with GitHub", href: "/api/auth/github" },
+  },
+feedback: {
+    badge: "Open Source & Community Driven",
+    heading: "Built in Public.\nShaped by You.",
+    description: "DevsArena isn't a black box. It's a living engine improved by the builders who use it. Don't just consume the platform—help forge it.",
+    
+    contribute: {
+      title: "Contribute to Core",
+      description: "Dive into the source code. Fix bugs, optimize the runner, or build entirely new guided project tracks.",
+      cta: { label: "Star on GitHub", href: "https://github.com/KrishnaChaitanya45/codex" }
+    },
+
+    form: {
+      title: "Direct Signal",
+      subtitle: "No support tickets. No bots. Your message goes directly to the maintainer's terminal.",
+      placeholder: "I wish DevsArena had...",
+      button: {
+        idle: "Send Signal",
+        loading: "Transmitting...",
+        success: "Signal Received"
+      },
+      successMessage: "Message received loud and clear. Thanks for helping us build."
+    }
   },
   footer: {
     tagline: "Learn by building. One checkpoint at a time.",

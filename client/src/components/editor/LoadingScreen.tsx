@@ -22,7 +22,7 @@ export function LoadingScreen({
   bootstrap: externalBootstrap
 }: LoadingScreenProps) {
   // Use external bootstrap instance if provided to avoid double websocket + state divergence
-  const bootstrap = externalBootstrap || useLabBootstrap({ labId, language, autoConnectPty: false });
+  const bootstrap = externalBootstrap || useLabBootstrap({ isProject: true, labId, language, autoConnectPty: false });
 
   // Map bootstrap phases to UI steps (granular, includes metadata)
   const phaseToStep = (phase: typeof bootstrap.phase): number => {

@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { X, Clock, AlertTriangle } from "lucide-react";
+import posthog from "posthog-js";
 
 interface MaxLabsModalProps {
   isOpen: boolean;
@@ -10,6 +11,15 @@ export const MaxLabsModal: React.FC<MaxLabsModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  // Track max labs limit reached event (churn risk indicator)
+  useEffect(() => {
+    if (isOpen) {
+      posthog.capture('max_labs_limit_reached', {
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const funnyMessages = [
