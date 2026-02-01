@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, act } from 'react';
 import { useParams } from 'next/navigation';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Loader2 } from 'lucide-react';
+import { signIn } from 'next-auth/react';
 
 // Components
 import FileExplorer from "@/components/v1/FileExplorer";
@@ -62,7 +63,7 @@ export default function V1ProjectPage() {
   const currentPlaygroundOption = PLAYGROUND_OPTIONS.find(option => option.id === language);
 
   // Unified bootstrap hook (single path)
-  const bootstrap = useLabBootstrap({ labId, language, autoConnectPty: false });
+  const bootstrap = useLabBootstrap({ labId,isProject:false,  language, autoConnectPty: false });
 
   // State management - ALL useState calls MUST be at the top
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -74,10 +75,13 @@ export default function V1ProjectPage() {
     { type: 'info', message: 'Welcome to DevArena Editor!', timestamp: new Date() },
   ]);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
   // Set when LoadingScreen reports ready; allows us to hide it even if bootstrap says not fully ready yet
   const [loadingDone, setLoadingDone] = useState(false);
   const [loadingFile, setLoadingFile] = useState<string | null>(bootstrap.activeFile);
   const [showMaxLabsModal, setShowMaxLabsModal] = useState(false);
+  const lastErrorRef = useRef<string | null>(null);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   
   const lastRunCommandRef = useRef<string | null>(null);
   const savingFiles = useRef<Set<string>>(new Set());
@@ -92,6 +96,22 @@ export default function V1ProjectPage() {
           language: string;
         }>
       >([]);
+
+    useEffect(() => {
+      let cancelled = false;
+      fetch('/api/auth/session')
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          setIsRegistered(!!data?.user);
+        })
+        .catch(() => {
+          if (!cancelled) setIsRegistered(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
   
     // Initialize PTY Hook
     const pty = usePty({
@@ -176,6 +196,16 @@ export default function V1ProjectPage() {
     } else if (bootstrap.error) {
       console.log('Different error detected:', bootstrap.error.code, bootstrap.error.message);
     }
+  }, [bootstrap.error]);
+
+  useEffect(() => {
+    if (!bootstrap.error?.message) return;
+    const key = `${bootstrap.error.code || 'error'}:${bootstrap.error.message}`;
+    if (lastErrorRef.current === key) return;
+    lastErrorRef.current = key;
+    setErrorToast(`Action failed: ${bootstrap.error.message}. Please try again.`);
+    const t = setTimeout(() => setErrorToast(null), 3500);
+    return () => clearTimeout(t);
   }, [bootstrap.error]);
 
   useEffect(() => {
@@ -779,6 +809,11 @@ export default function V1ProjectPage() {
           {saveToast}
         </div>
       )}
+      {errorToast && (
+        <div className="absolute top-4 right-4 z-50 bg-red-600 text-white px-3 py-1 rounded text-sm">
+          {errorToast}
+        </div>
+      )}
 
       {/* Main Content - Show IDE immediately when connected */}
       <PanelGroup direction="horizontal">
@@ -842,15 +877,46 @@ export default function V1ProjectPage() {
 
             {/* Terminal Panel */}
             <Panel defaultSize={40} minSize={20}>
-              <TerminalComponent
-                ref={terminalRef}
-                isConnected={pty.connectionState === "connected"}
-                connectionError={pty.runStatus.error}
-                labId={labId}
-                onRetry={pty.connect}
-                onInput={(data) => pty.write(data)}
-                onResize={(cols, rows) => pty.resize(cols, rows)}
-              />
+              {isRegistered === false ? (
+                <div className="h-full w-full bg-gradient-to-br from-gray-950 via-slate-900 to-black flex items-center justify-center">
+                  <div className="max-w-md mx-auto text-center px-6">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
+                      Terminal Access
+                    </div>
+                    <h3 className="mt-4 text-2xl font-semibold text-white">
+                      Register to unlock unrestricted terminal access
+                    </h3>
+                    <p className="mt-3 text-sm text-gray-300">
+                      Run installs, start servers, and work without limits. Create a free account to enable the full cloud terminal experience.
+                    </p>
+                    <div className="mt-5 flex items-center justify-center gap-3">
+                      <button
+                        onClick={() => signIn('github')}
+                        className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium shadow-lg shadow-cyan-500/20"
+                      >
+                        Register with GitHub
+                      </button>
+                      <button
+                        onClick={() => signIn('github')}
+                        className="px-4 py-2 rounded-md border border-gray-700 hover:border-gray-500 text-gray-300 text-sm"
+                      >
+                        Sign in
+                      </button>
+                    </div>
+                    <p className="mt-4 text-xs text-gray-500">No card required. It only takes a moment.</p>
+                  </div>
+                </div>
+              ) : (
+                <TerminalComponent
+                  ref={terminalRef}
+                  isConnected={pty.connectionState === "connected"}
+                  connectionError={pty.runStatus.error}
+                  labId={labId}
+                  onRetry={pty.connect}
+                  onInput={(data) => pty.write(data)}
+                  onResize={(cols, rows) => pty.resize(cols, rows)}
+                />
+              )}
             </Panel>
           </PanelGroup>
         </Panel>

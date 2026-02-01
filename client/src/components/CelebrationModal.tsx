@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Confetti from 'react-confetti';
+import posthog from 'posthog-js';
 
 interface CelebrationModalProps {
   isOpen: boolean;
@@ -43,17 +44,23 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({
       setIsVisible(true);
       setShowConfetti(true);
       setAnimationPhase('entering');
-      
+
+      // Track project completed event
+      posthog.capture('project_completed', {
+        projectTitle: projectTitle,
+        totalCheckpoints: totalCheckpoints,
+      });
+
       // Phase transitions for smoother experience
       const enteringTimer = setTimeout(() => setAnimationPhase('celebrating'), 500);
       const celebratingTimer = setTimeout(() => setAnimationPhase('settling'), 3000);
       const confettiTimer = setTimeout(() => setShowConfetti(false), 5000);
-      
+
       // Auto close after 8 seconds
       const autoCloseTimer = setTimeout(() => {
         handleClose();
       }, 8000);
-      
+
       return () => {
         clearTimeout(enteringTimer);
         clearTimeout(celebratingTimer);
@@ -61,7 +68,7 @@ const CelebrationModal: React.FC<CelebrationModalProps> = ({
         clearTimeout(autoCloseTimer);
       };
     }
-  }, [isOpen]);
+  }, [isOpen, projectTitle, totalCheckpoints]);
 
   const handleClose = () => {
     setIsVisible(false);

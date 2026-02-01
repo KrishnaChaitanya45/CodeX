@@ -12,6 +12,7 @@ const STATIC_ROUTES: StaticRoute[] = [
   { path: "", priority: 1, changefreq: "daily" }, 
   { path: "/playground", priority: 0.9, changefreq: "weekly" },
   { path: "/projects", priority: 0.9, changefreq: "weekly" },
+  { path: "/login", priority: 0.8, changefreq: "monthly" }
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

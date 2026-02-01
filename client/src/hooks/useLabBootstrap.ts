@@ -90,6 +90,8 @@ export type LabBootstrapPhase =
 
 interface UseLabBootstrapParams {
   labId: string;
+  questSlug?:string;
+  isProject: boolean;
   language: string;
   autoConnectPty?: boolean; // if true attempt PTY once FS ready
   requirePtyForReady?: boolean; // if true we only declare ready when PTY connected
@@ -103,7 +105,9 @@ interface RenameMeta { oldPath: string; newPath: string; }
 
 export function useLabBootstrap({
   labId,
+  isProject = false,
   language,
+  questSlug, 
   autoConnectPty = false,
   requirePtyForReady = false,
   mainFileCandidates = ['App.jsx','index.js','main.js','index.html','README.md'],
@@ -179,7 +183,7 @@ export function useLabBootstrap({
         if (data.activeCheckpoint !== undefined && data.activeCheckpoint !== null) {
           // New backend: number = next checkpoint to attempt; UI tracks last passed checkpoint
           if (typeof data.activeCheckpoint === 'number') {
-            setCurrentCheckpoint(Math.max(0, data.activeCheckpoint));
+            setCurrentCheckpoint( Math.max(1,data.activeCheckpoint));
           } else if (typeof data.activeCheckpoint === 'string') {
           const checkpointNum = parseInt(data.activeCheckpoint.replace('checkpoint_', ''));
           if (!isNaN(checkpointNum)) {
@@ -254,10 +258,11 @@ export function useLabBootstrap({
   const startProject = useCallback(async (): Promise<boolean> => {
     try {
       apiCalls.current++;
-      const res = await fetch('/api/project/start', {
+      const url = isProject ? `/api/project/start` : `/api/playground/start`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ labId, language })
+        body: JSON.stringify({ labId, language, projectSlug: questSlug })
       });
       if (res.status === 429) {
         setMaxLabsReached(true);
@@ -272,6 +277,23 @@ export function useLabBootstrap({
 
   // placeholder; real openFile defined later. We'll capture via ref to avoid ordering issue.
   const openFileRef = useRef<(p: string) => Promise<string>>(async () => '');
+
+  const isRetryableFsError = (e: any) => {
+    const msg = (e?.message || '').toString();
+    return /FS connection closed|WebSocket not connected|Request timeout/i.test(msg);
+  };
+
+  const retryFs = useCallback(async <T,>(op: () => Promise<T>): Promise<T> => {
+    try {
+      return await op();
+    } catch (e: any) {
+      if (!isRetryableFsError(e)) throw e;
+      try {
+        await fsSocket.ensureConnected(fsUrl);
+      } catch {}
+      return await op();
+    }
+  }, [fsUrl]);
 
   const fetchQuestMeta = useCallback(async (attempt = 1): Promise<QuestMetaResponse | null> => {
     try {
@@ -507,7 +529,7 @@ export function useLabBootstrap({
 
           // Update current checkpoint based on the activeCheckpoint coming from PTY response
           if (typeof result.activeCheckpoint === 'number') {
-            setCurrentCheckpoint(Math.max(0, result.activeCheckpoint ));
+            setCurrentCheckpoint( Math.max(1,result.activeCheckpoint));
           }
         }
         
@@ -585,12 +607,38 @@ export function useLabBootstrap({
       if (response.ok) {
         const data = await response.json();
         const raw = data.testResults ?? [];
-        const normalized = Array.isArray(raw) ? raw : [];
+        const normalized: NormalizedCheckpointResult[] = raw.map((checkpointResult: any) => {
+            const checkpointId = `${checkpointResult.checkpoint}`;
+
+            // Normalize status to handle new server payloads (e.g., FAILED_ASSERTION)
+            const rawStatus = checkpointResult.status || '';
+            const normalizedStatus = rawStatus.toString().toLowerCase();
+            const passed = checkpointResult.passed ?? (normalizedStatus === 'passed' || normalizedStatus === 'success');
+            
+            const errorPayload = checkpointResult.error || checkpointResult.Error || null;
+            return {
+              checkpoint: checkpointId,
+              passed,
+              status: rawStatus,
+              durationMs: checkpointResult.durationMs ?? checkpointResult.DurationMs,
+              error: errorPayload
+                ? {
+                    scenario: errorPayload.scenario || errorPayload.Scenario,
+                    expected: errorPayload.expected || errorPayload.Expected,
+                    received: errorPayload.received || errorPayload.Received,
+                    hint: errorPayload.hint || errorPayload.Hint,
+                    message: errorPayload.message || errorPayload.Message,
+                  }
+                : null,
+              output: passed ? `Checkpoint ${checkpointResult.checkpoint} passed successfully!` : undefined,
+            };
+          });
+        console.log("DEBUG: Normalized Test Results", normalized);
         setTestResults(normalized);
         
 
         if (typeof data.activeCheckpoint === 'number') {
-          setCurrentCheckpoint(data.activeCheckpoint);
+          setCurrentCheckpoint( Math.max(1,data.activeCheckpoint));
         }
         return normalized;
       }
@@ -612,7 +660,7 @@ export function useLabBootstrap({
   const openFile = useCallback(async (path: string): Promise<string> => {
     if (fileContents[path] !== undefined) return fileContents[path];
     try {
-      const resp: FileContentResponse = await fsSocket.sendMessage(FS_FETCH_FILE_CONTENT, { path }, fsUrl);
+      const resp: FileContentResponse = await retryFs(() => fsSocket.sendMessage(FS_FETCH_FILE_CONTENT, { path }, fsUrl));
       if (!isMounted.current) return '';
       setFileContents(prev => ({ ...prev, [path]: resp.content }));
       return resp.content;
@@ -620,35 +668,25 @@ export function useLabBootstrap({
       setError({ code: 'file_load_failed', message: e.message || 'Failed to load file' });
       return '';
     }
-  }, [fileContents, fsUrl]);
+  }, [fileContents, fsUrl, retryFs]);
   // sync ref after definition
   openFileRef.current = openFile;
 
   const saveFile = useCallback(async (path: string, content: string) => {
     try {
-      await fsSocket.sendOneWay(FS_FILE_CONTENT_UPDATE, { path, content }, fsUrl);
+      await retryFs(() => fsSocket.sendOneWay(FS_FILE_CONTENT_UPDATE, { path, content }, fsUrl));
       setFileContents(prev => ({ ...prev, [path]: content }));
     } catch (e: any) {
       setError({ code: 'file_save_failed', message: e.message || 'Failed to save file' });
       throw e;
     }
-  }, [fsUrl]);
+  }, [fsUrl, retryFs]);
 
-  const createFile = useCallback(async (path: string, isDir: boolean, content = '') => {
-    try {
-      await fsSocket.sendMessage(FS_NEW_FILE, { path, isDir, content }, fsUrl);
-      // Refresh parent directory lazily
-      const parent = path.split('/').slice(0,-1).join('/');
-      await loadDirectory(parent);
-      if (!isDir) setFileContents(prev => ({ ...prev, [path]: content }));
-    } catch (e: any) {
-      setError({ code: 'file_create_failed', message: e.message || 'Failed to create file' });
-    }
-  }, [fsUrl]);
+  
 
   const deleteFile = useCallback(async (path: string) => {
     try {
-      await fsSocket.sendMessage(FS_DELETE_FILE, { path }, fsUrl);
+      await retryFs(() => fsSocket.sendMessage(FS_DELETE_FILE, { path }, fsUrl));
       // Simplistic removal: rebuild tree from cache meta if available
       const meta = questMetaCache[labId];
       if (meta?.files) {
@@ -658,11 +696,11 @@ export function useLabBootstrap({
     } catch (e: any) {
       setError({ code: 'file_delete_failed', message: e.message || 'Failed to delete file' });
     }
-  }, [fsUrl, labId]);
+  }, [fsUrl, labId, retryFs]);
 
   const renameFile = useCallback(async (oldPath: string, newPath: string) => {
     try {
-      await fsSocket.sendMessage(FS_EDIT_FILE_META, { oldPath, newPath }, fsUrl);
+      await retryFs(() => fsSocket.sendMessage(FS_EDIT_FILE_META, { oldPath, newPath }, fsUrl));
       const meta = questMetaCache[labId];
       if (meta?.files) {
         meta.files.forEach(f => {
@@ -683,11 +721,11 @@ export function useLabBootstrap({
     } catch (e: any) {
       setError({ code: 'file_rename_failed', message: e.message || 'Failed to rename file' });
     }
-  }, [fsUrl, labId]);
+  }, [fsUrl, labId, retryFs]);
 
   const loadDirectory = useCallback(async (path: string) => {
     try {
-  const resp: any = await fsSocket.sendMessage(FS_LOAD_DIR, { path }, fsUrl);
+  const resp: any = await retryFs(() => fsSocket.sendMessage(FS_LOAD_DIR, { path }, fsUrl));
   if (resp && Array.isArray(resp.files)) {
         // Merge into meta cache if present
         const meta = questMetaCache[labId];
@@ -702,8 +740,20 @@ export function useLabBootstrap({
       setError({ code: 'dir_load_failed', message: e.message || 'Failed to load directory' });
       return [];
     }
-  }, [fsUrl, labId]);
+  }, [fsUrl, labId, retryFs]);
 
+  const createFile = useCallback(async (path: string, isDir: boolean, content = '') => {
+    try {
+      await retryFs(() => fsSocket.sendMessage(FS_NEW_FILE, { path, isDir, content }, fsUrl));
+      // Refresh parent directory lazily
+      const parent = path.split('/').slice(0,-1).join('/');
+      await loadDirectory(parent);
+      if (!isDir) setFileContents(prev => ({ ...prev, [path]: content }));
+    } catch (e: any) {
+      setError({ code: 'file_create_failed', message: e.message || 'Failed to create file' });
+    }
+  }, [fsUrl, loadDirectory, retryFs]);
+  
   // Kick off bootstrap
   useEffect(() => {
     isMounted.current = true;

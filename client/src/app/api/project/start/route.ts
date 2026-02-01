@@ -1,32 +1,79 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { getPostHogClient } from '@/lib/posthog-server';
 
-export async function POST(request: Request) {
+
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { language, labId } = body || {};
+    const { language, projectSlug, labId } = body || {};
+    let userId = request.headers.get('x-user-id');
+    if(!userId){
+        return NextResponse.json({success: false, error: 'Authorization failed'}, {status: 403});
+    }
+    // Validate required fields
     if (!language) {
-      return NextResponse.json({ error: 'language is required' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Language is required' }, 
+        { status: 400 }
+      );
+    }
+    
+    if (!projectSlug) {
+      return NextResponse.json(
+        { success: false, error: 'Project slug is required' }, 
+        { status: 400 }
+      );
     }
 
-    const backend = process.env.BACKEND_API_URL || 'http://localhost:8080';
- 
-    const url = `${backend}/v0/playground`;
-    // Proxy the request to backend. Backend will generate labId and return data.
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ language, labId })
-    });
-    
+    if (!labId) {
+      return NextResponse.json(
+        { success: false, error: 'Lab ID is required' }, 
+        { status: 400 }
+      );
+    }
 
-    const data = await res.json();
-    return NextResponse.json({
-      success: true,
-      labId,
-      ...data
-    }, { status: res.status });
-  } catch (err) {
-    console.error('Start proxy error:', err);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    // Forward request to backend
+    const response = await fetch(`${process.env.BACKEND_API_URL}/v0/quest/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        language,
+        projectSlug,
+        labId,
+        userId
+      }),
+    });
+
+    const data = await response.json();
+
+    // Track project started event with PostHog
+    if (response.ok) {
+      const posthog = getPostHogClient();
+      posthog.capture({
+        distinctId: userId,
+        event: 'project_started',
+        properties: {
+          language: language,
+          projectSlug: projectSlug,
+          labId: labId,
+          source: 'api'
+        }
+      });
+    }
+
+    return NextResponse.json(data, {
+      status: response.status
+    });
+  } catch (error) {
+    console.error('Error starting quest:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to start quest' 
+      },
+      { status: 500 }
+    );
   }
 }
