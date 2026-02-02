@@ -87,6 +87,24 @@ export function usePty({
     onReadyRef.current = onServerReady;
   }, [onTerminalData, onServerReady]);
 
+  const fetchInitialTestResults = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/test-results/${labId}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const raw = data.testResults ?? [];
+      const normalized: TestResult[] = Array.isArray(raw)
+        ? raw.map((r: any) => normalizeTestResult(r))
+        : [];
+      setTestState(prev => ({
+        ...prev,
+        results: normalized
+      }));
+    } catch (error) {
+      console.error('usePty: Failed to fetch initial test results', error);
+    }
+  }, [labId]);
+
   // --- Connection Logic ---
 
   const connect = useCallback(() => {
@@ -105,6 +123,7 @@ export function usePty({
       setConnectionState('connected');
       // Send initial heartbeat to establish session liveness
       ws.send(JSON.stringify({ type: 'heartbeat' }));
+      fetchInitialTestResults();
     };
 
     ws.onclose = (event) => {
@@ -144,7 +163,7 @@ export function usePty({
       onDataRef.current?.(raw);
     };
 
-  }, [labId]);
+  }, [labId, fetchInitialTestResults]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
