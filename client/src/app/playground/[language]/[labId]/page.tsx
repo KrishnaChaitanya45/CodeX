@@ -854,7 +854,7 @@ export default function V1ProjectPage() {
             onSave={handleSave}
             isRunning={isRunning}
             isRunningTests={pty.testState.isRunning}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={null}
             language={language}
             loadingFile={loadingFile}
           />

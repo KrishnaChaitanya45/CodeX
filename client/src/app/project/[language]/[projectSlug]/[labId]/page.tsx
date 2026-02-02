@@ -155,7 +155,7 @@ export default function ExperimentalProjectPage() {
       return () => clearTimeout(t);
     }
     lastTestCountRef.current = count;
-  }, [pty.testState.isRunning, pty.testState.results.length]);
+   }, [pty.testState.isRunning, pty.testState.results.length]);
 
   const showConnectionToast = useCallback((actionLabel: string) => {
     setConnectionToast(`Connection not established. Please wait before ${actionLabel}.`);
@@ -1013,7 +1013,7 @@ export default function ExperimentalProjectPage() {
             onSave={handleSave}
             isRunning={isRunning}
             isRunningTests={pty.testState.isRunning}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={String(pty.testState.currentCheckpoint)}
             language={language}
             loadingFile={loadingFile}
           />
@@ -1057,8 +1057,8 @@ export default function ExperimentalProjectPage() {
             checkpoints={checkpoints}
             testResults={pty.testState.results}
             isRunningTests={pty.testState.isRunning}
-            activeCheckpoint={bootstrap.currentCheckpoint}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            activeCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={String(pty.testState.currentCheckpoint)}
             params={{
               language,
               labId,
