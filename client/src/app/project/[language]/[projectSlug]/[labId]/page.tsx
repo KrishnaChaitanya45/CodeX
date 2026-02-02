@@ -763,7 +763,7 @@ export default function ExperimentalProjectPage() {
       setActiveRightTab("test-results");
 
       // 3. Determine checkpoint
-      const nextCheckpoint = bootstrap.currentCheckpoint;
+      const nextCheckpoint = pty.testState.currentCheckpoint;
       const checkpointId = `${nextCheckpoint}`;
 
       setConsoleLogs((prev) => [
