@@ -17,6 +17,7 @@ import { PLAYGROUND_OPTIONS } from "@/constants/playground";
 import { dlog } from "@/utils/debug";
 import { usePty } from "@/hooks/usePty";
 import type { TerminalHandle } from "@/components/editor/Terminal";
+import { MobileSupportModal } from "@/components/common/MobileSupportModal";
 
 interface LogEntry {
   type: "info" | "success" | "error" | "warning";
@@ -61,10 +62,20 @@ export default function ExperimentalProjectPage() {
   const language = getParamString(params?.language) || "html";
   const labId = getParamString(params?.labId) || "test-lab";
   const projectSlug = getParamString(params?.projectSlug) || "test-slug";
+  const [isMobile, setIsMobile] = useState(false);
   // Find the current playground option based on language
   const currentPlaygroundOption = PLAYGROUND_OPTIONS.find(
     (option) => option.id === language,
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
 
   // Unified bootstrap hook
   const bootstrap = useLabBootstrap({
@@ -72,6 +83,7 @@ export default function ExperimentalProjectPage() {
     isProject: true,
     questSlug: projectSlug,
     language,
+    disabled: isMobile,
     autoConnectPty: false,
     requirePtyForReady: false,
   });
@@ -958,6 +970,15 @@ export default function ExperimentalProjectPage() {
 
   return (
     <div className="h-screen w-screen bg-gray-900 overflow-hidden relative">
+      <MobileSupportModal
+        isOpen={isMobile}
+        subtitle="We’re crafting a touch-friendly lab experience."
+        message="For now, we recommend using a desktop or laptop for the best experience."
+        secondaryLabel="Browse projects"
+        secondaryHref="/projects"
+        primaryLabel="Go back home"
+        primaryHref="/"
+      />
       {/* Save toast */}
       {saveToast && (
         <div className="absolute top-4 right-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-xl text-sm shadow-lg backdrop-blur border border-green-400/40">

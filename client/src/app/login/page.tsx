@@ -13,7 +13,7 @@ export default function LoginPage() {
   const content = siteContent.login;
 
   return (
-    <main className="relative min-h-screen text-white selection:bg-cyan-500/30 selection:text-cyan-200 overflow-hidden">
+    <main className="relative min-h-screen text-white selection:bg-cyan-500/30 selection:text-cyan-200 overflow-hidden px-4 sm:px-6 lg:px-8">
       {/* Background Ambience */}
       <Squares
         className="absolute inset-0 z-0 opacity-[0.15]"

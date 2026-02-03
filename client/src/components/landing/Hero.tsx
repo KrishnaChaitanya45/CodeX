@@ -19,15 +19,15 @@ export default function Hero({
   subtext: string;
 }) {
   return (
-    <section id="hero" className="relative mx-auto max-w-6xl px-6 pt-32 pb-20">
-      <div className="grid items-center lg:grid-rows-2">
-        <div className="flex flex-col items-center">
+    <section id="hero" className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-32 pb-16 sm:pb-20">
+      <div className="grid items-center gap-12 lg:grid-rows-2">
+        <div className="flex flex-col items-center text-center">
           <Badge variant="success" className="gap-2">
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             Public Beta • Built for Developers
           </Badge>
 
-          <h1 className="mt-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-center">
+          <h1 className="mt-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-center text-balance">
             {headline.type == "two-liner" ? (
               <>
                 <span className="block bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
@@ -43,19 +43,19 @@ export default function Hero({
               </span>
             )}
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-gray-300 max-w-2xl text-center">
+          <p className="mt-6 text-base sm:text-lg md:text-xl text-gray-300 max-w-2xl text-center">
             {subheadline}
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-4">
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg" className="rounded-2xl px-6 shadow-lg shadow-primary-500/25">
+              <Button asChild size="lg" className="rounded-2xl px-6 shadow-lg shadow-primary-500/25 w-full sm:w-auto">
                 <Link href={cta.href}>
                   <GitHubIcon fontSize="small" />
                   {cta.label}
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-2xl border-white/20 bg-white/5 px-6 hover:bg-white/10">
+              <Button asChild size="lg" variant="outline" className="rounded-2xl border-white/20 bg-white/5 px-6 hover:bg-white/10 w-full sm:w-auto">
                 <Link href={secondaryCta.href}>
                   {secondaryCta.label}
                   <ArrowForwardIcon fontSize="small" />
@@ -66,9 +66,9 @@ export default function Hero({
           </div>
         </div>
 
-        <div className="relative mt-12 lg:mt-0">
+        <div className="relative mt-4 lg:mt-0">
           <div className="pointer-events-none absolute -inset-10 rounded-[2.5rem] bg-gradient-to-tr from-primary-500/20 via-primary-400/10 to-transparent blur-3xl" />
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto w-full">
             <div className="rounded-2xl border border-white/10 bg-black/60 overflow-hidden shadow-2xl backdrop-blur-sm">
             {/* Editor Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-secondary/50 border-b border-border">
@@ -85,7 +85,7 @@ export default function Hero({
               </div>
             </div>
             {/* Editor Content */}
-            <div className="p-6 font-mono text-sm overflow-x-auto">
+            <div className="p-4 sm:p-6 font-mono text-xs sm:text-sm overflow-x-auto">
               <pre className="text-muted-foreground leading-relaxed">
                 <code>
                   <span className="text-cyan-400">import</span> {`{ `}<span className="text-amber-400">NextRequest</span>{`, `}<span className="text-amber-400">NextResponse</span>{` }`} <span className="text-cyan-400">from</span> <span className="text-emerald-400">{`'next/server'`}</span>{`\n`}

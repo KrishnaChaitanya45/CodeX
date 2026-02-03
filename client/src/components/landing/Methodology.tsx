@@ -21,11 +21,11 @@ export default function Methodology({
   cta?: { label: string; href: string };
 }) {
   return (
-    <section id={id} className="mx-auto max-w-6xl px-6 py-20">
+    <section id={id} className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
       <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
         <div>
-          <h2 className="text-3xl md:text-4xl font-semibold text-white">{title}</h2>
-          <p className="mt-4 text-gray-300 max-w-xl">{body}</p>
+          <h2 className="text-3xl md:text-4xl font-semibold text-white text-balance">{title}</h2>
+          <p className="mt-4 text-gray-300 max-w-xl text-base sm:text-lg">{body}</p>
 
           <div className="mt-8 grid gap-4">
             {bullets.map((b, idx) => {
@@ -67,7 +67,7 @@ export default function Methodology({
           )}
         </div>
 
-        <div>{illustration}</div>
+        <div className="mt-6 lg:mt-0">{illustration}</div>
       </div>
     </section>
   );

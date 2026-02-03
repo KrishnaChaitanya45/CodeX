@@ -12,7 +12,7 @@ import { siteContent } from "./content";
 
 export default function Home() {
   return (
-    <main className="relative min-h-screen text-white">
+    <main className="relative min-h-screen text-white sm:px-6 lg:px-8 overflow-x-hidden">
       <Squares
         className="pointer-events-none"
         direction="diagonal"
