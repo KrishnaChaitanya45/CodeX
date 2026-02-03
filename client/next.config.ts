@@ -21,7 +21,21 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // This is required to support PostHog trailing slash API requests
+  async redirects() {
+    return [
+      {
+        source: '/v1/playground/:slug*',
+        destination: '/playground/:slug*', 
+        permanent: true,
+      },
+      {
+        source: '/v1/experimental/:slug*',
+        destination: '/projects/:slug*',
+        permanent: true,
+      },
+    ];
+  },
+
   skipTrailingSlashRedirect: true,
 };
 
