@@ -42,14 +42,38 @@ type LabMonitoringEntry struct {
 	CreatedAt     int64
 }
 
+type TestError struct {
+	Type     string `json:"type,omitempty"`
+	Message  string `json:"message,omitempty"`
+	Scenario string `json:"scenario,omitempty"`
+	Expected string `json:"expected,omitempty"`
+	Received string `json:"received,omitempty"`
+	Hint     string `json:"hint,omitempty"`
+}
+
+type TestResult struct {
+	Checkpoint int        `json:"checkpoint"`
+	Status     string     `json:"status"`
+	DurationMs int64      `json:"durationMs"`
+	Error      *TestError `json:"error,omitempty"`
+}
+type DirtyFileEntry struct {
+	Path   string `json:"path"`
+	Action string `json:"action"` // "edit" or "delete"
+}
+
 type LabInstanceEntry struct {
-	LabID          string
-	CreatedAt      int64
-	Language       string
-	DirtyReadPaths []string
-	Status         LabStatus
-	LastUpdatedAt  int64
-	ProgressLogs   []LabProgressEntry
+	LabID            string
+	CreatedAt        int64
+	Language         string
+	CodeLink         string
+	DirtyReadPaths   []DirtyFileEntry
+	Status           LabStatus
+	LastUpdatedAt    int64
+	UserId           string
+	ProgressLogs     []LabProgressEntry
+	ActiveCheckpoint int
+	TestResults      []TestResult
 }
 
 // RedisUtils struct to hold Redis client and context
@@ -125,6 +149,8 @@ func (r *RedisUtils) CreateLabInstance(instance LabInstanceEntry) {
 	if r.Client == nil {
 		log.Fatalf("Redis client is not initialized")
 	}
+
+	log.Printf("DEBUG: TRYING TO SAVE LAB INSTANCE WTIH CODE LINK %s\n", instance.CodeLink)
 
 	data, err := json.Marshal(instance)
 	if err != nil {

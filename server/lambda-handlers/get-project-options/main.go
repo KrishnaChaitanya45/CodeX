@@ -21,6 +21,13 @@ type service struct{ db *gorm.DB }
 
 func init() { svc = &service{db: database.Connect("project_options")} }
 
+func (s *service) GetQuestsByLanguage(string) ([]database.QuestMeta, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (s *service) DeleteQuest(string) error {
+	return nil
+}
+
 func (s *service) Health() map[string]string { return map[string]string{"status": "up"} }
 func (s *service) Close() error {
 	if s.db == nil {

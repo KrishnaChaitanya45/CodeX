@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/datatypes"
 )
 
 // Request types for API operations
@@ -19,6 +20,16 @@ type AddQuestRequest struct {
 	Requirements   []string            `json:"requirements"`
 	BoilerplateUrl string              `json:"boilerplateUrl"`
 	Checkpoints    []CheckpointRequest `json:"checkpoints"`
+}
+
+type SyncUserRequest struct {
+	GithubID  string `json:"github_id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatar_url"`
+	Bio       string `json:"bio"`
+	GithubURL string `json:"github_url"`
+	Name      string `json:"name"`
 }
 
 type DeleteQuestRequest struct {
@@ -175,6 +186,50 @@ type Testcase struct {
 	QuestID      uuid.UUID `json:"quest_id"`
 }
 
+type User struct {
+	ID uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+
+	GithubID  string `json:"github_id" gorm:"uniqueIndex"`
+	Username  string `json:"username" gorm:"uniqueIndex"`
+	Bio       string `json:"bio"`
+	GithubURL string `json:"github_url" gorm:"uniqueIndex"`
+	Email     string `json:"email" gorm:"uniqueIndex"`
+	AvatarURL string `json:"avatar_url"`
+	Name      string `json:"name"`
+
+	Playgrounds []Lab `json:"playgrounds" gorm:"foreignKey:UserID"`
+	Projects    []Lab `json:"projects" gorm:"foreignKey:UserID"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Lab struct {
+	ID string `json:"id" gorm:"primaryKey"`
+
+	UserID uuid.UUID `json:"user_id" gorm:"type:uuid;not null"`
+	User   User      `json:"user"`
+
+	QuestID *uuid.UUID `json:"quest_id" gorm:"type:uuid"`
+	Quest   *Quest     `json:"quest"`
+
+	Status           string     `json:"status"`
+	Language         string     `json:"language"`
+	TechnologyID     uuid.UUID  `json:"technology_id" gorm:"type:uuid"`
+	Technology       Technology `json:"technology"`
+	ActiveCheckpoint int        `json:"active_checkpoint" gorm:"default:1"`
+
+	CodeLink  string `json:"code_link"`
+	TestsLink string `json:"tests_link"`
+
+	ProgressLogs   datatypes.JSON `json:"progress_logs" gorm:"type:jsonb"`
+	TestResults    datatypes.JSON `json:"test_results" gorm:"type:jsonb"`
+	DirtyReadPaths pq.StringArray `json:"dirty_read_paths" gorm:"type:text[]"`
+
+	LastUpdatedAt time.Time `json:"last_updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 func Init() error {
 	database := dbInstance.db
 	err := database.AutoMigrate(
@@ -189,6 +244,8 @@ func Init() error {
 		&Resource{},
 		&Submission{},
 		&Testcase{},
+		&User{},
+		&Lab{},
 	)
 	log.Printf("Database migration completed %v", err)
 	return err

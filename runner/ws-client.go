@@ -5,22 +5,25 @@ import (
 	"log"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
-	conn    *websocket.Conn
-	handler *WSManager
-	send    chan WSResponse
-	done    chan struct{}
+	conn     *websocket.Conn
+	handler  *WSManager
+	s3Client *s3.Client
+	send     chan WSResponse
+	done     chan struct{}
 }
 
-func NewClient(conn *websocket.Conn, handler *WSManager) *Client {
+func NewClient(conn *websocket.Conn, handler *WSManager, s3Client *s3.Client) *Client {
 	return &Client{
-		conn:    conn,
-		handler: handler,
-		send:    make(chan WSResponse, 256),
-		done:    make(chan struct{}),
+		conn:     conn,
+		s3Client: s3Client,
+		handler:  handler,
+		send:     make(chan WSResponse, 256),
+		done:     make(chan struct{}),
 	}
 }
 

@@ -30,12 +30,24 @@ func (s *service) Close() error {
 	sqlDB, _ := s.db.DB()
 	return sqlDB.Close()
 }
-
-// GetQuestsByLanguage returns quests filtered by technology/language
 func (s *service) GetQuestsByLanguage(language string) ([]database.QuestMeta, error) {
 	var quests []database.Quest
-
+	langArray := make([]string, 0)
+	if language == "vanilla-js" {
+		langArray = append(langArray, "HTML", "CSS", "JavaScript")
+	} else {
+		langArray = append(langArray, language)
+	}
 	// Join with technology table to filter by language
+	var whereClause string
+	var args []interface{}
+	for i, lang := range langArray {
+		if i > 0 {
+			whereClause += " OR "
+		}
+		whereClause += "technologies.name = ?"
+		args = append(args, lang)
+	}
 	err := s.db.
 		Preload("Category").
 		Preload("TechStack").
@@ -43,7 +55,8 @@ func (s *service) GetQuestsByLanguage(language string) ([]database.QuestMeta, er
 		Preload("Difficulty").
 		Joins("JOIN quest_technologies ON quests.id = quest_technologies.quest_id").
 		Joins("JOIN technologies ON quest_technologies.technology_id = technologies.id").
-		Where("technologies.name = ?", language).
+		Where(whereClause, args...).
+		Group("quests.id").
 		Find(&quests).Error
 
 	if err != nil {

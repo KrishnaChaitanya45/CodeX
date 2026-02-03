@@ -68,8 +68,8 @@ export const siteContent: SiteContent = {
     },
     subheadline:
       "Stop copying code from 10-hour videos. We provide the architecture and a roadmap broken into testable milestones. You write the code, debug the errors, and learn by making it work.",
-    cta: { label: "Get Started", href: "/api/auth/github" },
-    secondaryCta: { label: "See Guided Projects", href: "#guided-projects" },
+    cta: { label: "Get Started", href: "/login" },
+    secondaryCta: { label: "See Guided Projects", href: "/projects" },
     subtext: "No credit card required.",
   },
   guidedProjects: {
@@ -146,7 +146,7 @@ export const siteContent: SiteContent = {
     ],
     note:
       "💬 Building something massive? Need higher limits? Drop us a message—we're happy to support serious builders pushing the platform.",
-    footerCta: { label: "Join via GitHub", href: "/api/auth/github" },
+    footerCta: { label: "Join via GitHub", href: "/login" },
   },
   login: {
     title: "Join the Arena",
@@ -171,7 +171,7 @@ export const siteContent: SiteContent = {
         description: "Each lab runs in a secure, isolated environment built for serious builders.",
       },
     ],
-    cta: { label: "Continue with GitHub", href: "/api/auth/github" },
+    cta: { label: "Continue with GitHub", href: "/login" },
   },
 feedback: {
     badge: "Open Source & Community Driven",

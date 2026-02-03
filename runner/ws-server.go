@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -44,12 +45,17 @@ func (m *WSManager) serveFS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewClient(conn, m)
+	s3Client, err := InitS3Client()
+	if err != nil {
+		log.Println("Failed to initialize S3 client:", err)
+		return
+	}
+	client := NewClient(conn, m, s3Client)
 
 	// Send connection established message using standardized format
 	if err := client.SendInfo("Connection established", map[string]string{
 		"server":  "runner-service",
-		"version": "1.0.0",
+		"version": "1.7.0",
 	}); err != nil {
 		log.Println("Failed to send connection message:", err)
 		return
@@ -79,6 +85,7 @@ func (m *WSManager) setupHandlers() {
 	m.fsHandlers[FS_EDIT_FILE_META] = EditFileMetaHandler
 	m.fsHandlers[FS_FETCH_QUEST_META] = FetchQuestMetaHandler
 	m.fsHandlers[FS_INITIALIZE_CLIENT] = InitializeClientHandler
+	m.fsHandlers[SYNC_FILES_TO_S3] = SyncFilesToS3Handler
 }
 
 func (m *WSManager) routeEvent(event Event, client *Client) error {
@@ -109,12 +116,19 @@ func (m *WSManager) routeEvent(event Event, client *Client) error {
 }
 
 func checkOrigin(r *http.Request) bool {
-	// origin := r.Header.Get("Origin")
-	// log.Printf("Checking origin: %s", origin)
-	// //! TODO Implement your origin checking logic here
-	// if origin == "http://localhost:3000" {
-	// 	log.Printf("Origin check passed for: %s", origin)
-	// 	return true
-	// }
+	origin := r.Header.Get("Origin")
+	log.Printf(" RECEIVED REQUEST FROM %v REMOTE ADDRR %v ORIGIN,", r.RemoteAddr, origin)
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return true
+	}
+
+	host := u.Host
+	if host == "devsarena.in" || host == "staging.devsarena.in" {
+		return true
+	}
 	return true
 }

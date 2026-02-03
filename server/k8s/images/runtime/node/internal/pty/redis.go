@@ -43,12 +43,16 @@ const (
 	K8S_SERVICE         LabLogServices = "k8s"
 )
 
+type DirtyFileEntry struct {
+	Path   string `json:"path"`
+	Action string `json:"action"` // "edit" or "delete"
+}
 type LabInstanceEntry struct {
 	LabID            string                  `json:"labId"`
 	CreatedAt        int64                   `json:"createdAt"`
 	Language         string                  `json:"language"`
 	ActiveCheckpoint int                     `json:"activeCheckpoint"`
-	DirtyReadPaths   []string                `json:"dirtyReadPaths"`
+	DirtyReadPaths   []DirtyFileEntry        `json:"dirtyReadPaths"`
 	Status           LabStatus               `json:"status"`
 	LastUpdatedAt    int64                   `json:"lastUpdatedAt"`
 	ProgressLogs     []LabProgressEntry      `json:"progressLogs"`

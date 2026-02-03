@@ -3,11 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
+	"lms_v0/utils"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/joho/godotenv/autoload"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -18,7 +20,12 @@ import (
 type Service interface {
 	Health() map[string]string
 	Close() error
+	SyncUser(req SyncUserRequest) (*User, error)
+	ValidateUserAndLimits(userId string) error
+	GetLabById(labId string) (*Lab, error, bool)
+	CreateLabForUser(userId string, labId string, language string, codeLink string, questId uuid.UUID, labType string) (*Lab, error)
 	GetAllQuests() ([]QuestMeta, error)
+	SyncLabProgress(ctx context.Context, lab *Lab, labDetails utils.LabInstanceEntry) error
 	GetQuestBySlug(slug string) (*Quest, error)
 	GetQuestsByLanguage(language string) ([]QuestMeta, error)
 	GetAllCheckpointsForQuest(questID string) ([]Checkpoint, error)
