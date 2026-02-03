@@ -71,6 +71,7 @@ interface UseLabBootstrapParams {
   questSlug?:string;
   isProject: boolean;
   language: string;
+  disabled?: boolean;
   autoConnectPty?: boolean; // if true attempt PTY once FS ready
   requirePtyForReady?: boolean; // if true we only declare ready when PTY connected
   mainFileCandidates?: string[]; // ordered list; fallback to first file
@@ -86,6 +87,7 @@ export function useLabBootstrap({
   isProject = false,
   language,
   questSlug, 
+  disabled = false,
   autoConnectPty = false,
   requirePtyForReady = false,
   mainFileCandidates = ['App.jsx','index.js','main.js','index.html','README.md'],
@@ -122,6 +124,7 @@ export function useLabBootstrap({
 
   // Adaptive poll loop (single flight)
   const pollProgress = useCallback(async () => {
+    if (disabled) return;
     const start = Date.now();
     while (!pollingStopped.current && isMounted.current && !fsReady) {
       try {
@@ -180,7 +183,7 @@ export function useLabBootstrap({
       await delay(interval);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labId]);
+  }, [labId, disabled]);
 
   const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -535,6 +538,7 @@ export function useLabBootstrap({
   
   // Kick off bootstrap
   useEffect(() => {
+    if (disabled) return;
     isMounted.current = true;
     pollProgress();
     return () => {
@@ -546,7 +550,7 @@ export function useLabBootstrap({
         ptySocketRef.current = null;
       }
     };
-  }, [pollProgress]);
+  }, [pollProgress, disabled]);
 
   // Auto connect PTY once FS ready (lazy after a tick) if requested
   useEffect(() => {
