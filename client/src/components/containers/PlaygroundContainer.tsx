@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
   ArrowRight,
@@ -18,11 +18,27 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import { siteContent } from "@/app/content";
 import posthog from "posthog-js";
+import { MobileSupportModal } from "@/components/common/MobileSupportModal";
 
 export default function PlaygroundContainer() {
   const [loading, setLoading] = useState<string | null>(null);
   const [showMaxLabsModal, setShowMaxLabsModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
   async function startLab(language: string, id: string) {
+    if (isMobile) {
+      setShowMobileModal(true);
+      return;
+    }
     setLoading(id);
     try {
       const labId = generateRandomLabId();
@@ -291,6 +307,10 @@ export default function PlaygroundContainer() {
           setShowMaxLabsModal(false);
           window.location.href = "/playground";
         }}
+      />
+      <MobileSupportModal
+        isOpen={showMobileModal}
+        onClose={() => setShowMobileModal(false)}
       />
     </>
   );

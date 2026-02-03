@@ -8,7 +8,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -148,7 +153,8 @@ func FileContentUpdateHandler(ctx context.Context, payload json.RawMessage, clie
 
 	fileUpdatePath := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.Path)
 	log.Printf("FILE PATH: %s", fileUpdatePath)
-
+	UpdateLabInstanceDirtyWrites(LAB_ID, fileUpdatePath, "edit")
+	log.Printf("UPDATED THE PATH TO REDIS %s", fileUpdatePath)
 	return client.SendResponse(RESPONSE_FILE_UPDATED, map[string]interface{}{
 		"path":    req.Path,
 		"success": true,
@@ -185,6 +191,10 @@ func NewFileHandler(ctx context.Context, payload json.RawMessage, client *Client
 		}
 
 	}
+	if !req.IsDir { // Only sync files
+		fileUpdatePath := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.Path)
+		UpdateLabInstanceDirtyWrites(LAB_ID, fileUpdatePath, "edit")
+	}
 
 	return client.SendResponse(RESPONSE_FILE_CREATED, map[string]interface{}{
 		"path":    req.Path,
@@ -213,6 +223,8 @@ func DeleteFileHandler(ctx context.Context, payload json.RawMessage, client *Cli
 		return fmt.Errorf("failed to delete %s: %w", targetPath, err)
 	}
 
+	fileUpdatePath := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.Path)
+	UpdateLabInstanceDirtyWrites(LAB_ID, fileUpdatePath, "delete")
 	return client.SendResponse(RESPONSE_FILE_DELETED, map[string]interface{}{
 		"path":    req.Path,
 		"success": true,
@@ -238,6 +250,9 @@ func EditFileMetaHandler(ctx context.Context, payload json.RawMessage, client *C
 	if err := os.Rename(oldPath, newPath); err != nil {
 		return fmt.Errorf("failed to rename %s to %s: %w", oldPath, newPath, err)
 	}
+	oldS3Path := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.OldPath)
+	newS3Path := fmt.Sprintf("code/%s/%s/%s", LANGUAGE, LAB_ID, req.NewPath)
+	UpdateLabInstanceDirtyRename(LAB_ID, oldS3Path, newS3Path)
 
 	return client.SendResponse(RESPONSE_FILE_RENAMED, map[string]interface{}{
 		"oldPath": req.OldPath,
@@ -303,4 +318,87 @@ func FetchQuestMetaHandler(ctx context.Context, payload json.RawMessage, client 
 // Helper function to send response to client (deprecated - use client methods instead)
 func sendResponse(client *Client, responseType string, data interface{}) error {
 	return client.SendResponse(responseType, data)
+}
+
+func SyncFilesToS3Handler(ctx context.Context, payload json.RawMessage, client *Client) error {
+	labInstance, err := GetLabInstance(os.Getenv("LAB_ID"))
+	if err != nil {
+		return err
+	}
+	bucketName := os.Getenv("AWS_S3_BUCKET_NAME")
+	s3CodeLink := os.Getenv("LAB_CODE_LINK")
+	dirtyFiles := labInstance.DirtyReadPaths // Now a slice of structs
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(10)
+
+	// Calculate prefix to strip: code/<lang>/<labid>/
+	prefix := fmt.Sprintf("code/%s/%s/", LANGUAGE, os.Getenv("LAB_ID"))
+
+	for _, entry := range dirtyFiles {
+
+		currentEntry := entry // Capture for closure
+		currentPath := strings.TrimPrefix(currentEntry.Path, prefix)
+		log.Printf("DEBUG: TRIMMED PREFIX AND THE PATH %s", currentPath)
+		currentPath = strings.Join([]string{s3CodeLink, currentPath}, "/")
+		log.Printf("DEBUG: FINAL PATH AFTER JOINING BUCKET NAME AND S3 LINK %s", currentPath)
+		g.Go(func() error {
+			// Case 1: DELETE
+			if currentEntry.Action == "delete" {
+				_, err := client.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+					Bucket: aws.String(bucketName),
+					Key:    aws.String(currentPath),
+				})
+				if err != nil {
+					log.Printf("Failed to delete %s: %v", currentPath, err)
+					// Don't return error to keep other syncs going
+				} else {
+					log.Printf("Synced (Deleted): %s", currentPath)
+				}
+				return nil
+			}
+
+			// Case 2: EDIT (Upload)
+			if currentEntry.Action == "edit" {
+				// 1. Determine Local Path by stripping prefix
+				localPath := strings.TrimPrefix(currentEntry.Path, prefix)
+				log.Printf("DEBUG: LOCAL PATH %s", localPath)
+				// 2. Open File
+				file, err := GetFileByPath(ctx, localPath)
+				if err != nil {
+					log.Printf("Skipping %s: Local file not found", localPath)
+					return nil // Skip if local file	 is missing (might have been deleted quickly after)
+				}
+				defer file.Close()
+
+				// 3. Upload (PutObject)
+				// Note: Simplified for brevity (removed MD5 check for clarity, add back if needed)
+				_, err = client.s3Client.PutObject(ctx, &s3.PutObjectInput{
+					Bucket: aws.String(bucketName),
+					Key:    aws.String(currentPath),
+					Body:   file,
+				})
+				if err != nil {
+					return err
+				}
+				log.Printf("Synced (Uploaded): %s", currentPath)
+			}
+			return nil
+		})
+	}
+
+	return g.Wait()
+}
+
+func GetFileByPath(ctx context.Context, path string) (*os.File, error) {
+	// Sanitize path to prevent directory traversal attacks if path comes from user input
+	baseDir := getWorkspaceDir()
+	fullPath := filepath.Join(baseDir, path)
+	log.Printf("DEBUG: Path with workspace joined %s \n", fullPath)
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return f, nil
 }

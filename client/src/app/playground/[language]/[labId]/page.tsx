@@ -24,6 +24,7 @@ import { usePty } from '@/hooks/usePty';
 import TerminalComponent from '@/components/editor/Terminal';
 import { TerminalTabs } from '@/components/editor/TerminalTabs';
 import { ResizablePanel } from '@/components/v1/ResizablePanel';
+import { MobileSupportModal } from '@/components/common/MobileSupportModal';
 
 
 // Mock progress data
@@ -58,12 +59,22 @@ export default function V1ProjectPage() {
 
   const language = getParamString(params?.language) || 'html';
   const labId = getParamString(params?.labId) || 'test-lab';
+  const [isMobile, setIsMobile] = useState(false);
 
   // Find the current playground option based on language
   const currentPlaygroundOption = PLAYGROUND_OPTIONS.find(option => option.id === language);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+
   // Unified bootstrap hook (single path)
-  const bootstrap = useLabBootstrap({ labId,isProject:false,  language, autoConnectPty: false });
+  const bootstrap = useLabBootstrap({ labId,isProject:false,  language, disabled: isMobile, autoConnectPty: false });
 
   // State management - ALL useState calls MUST be at the top
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -802,6 +813,15 @@ export default function V1ProjectPage() {
 
   return (
     <div className="h-screen w-screen bg-gray-900 overflow-hidden relative">
+      <MobileSupportModal
+        isOpen={isMobile}
+        subtitle="We’re crafting a touch-friendly lab experience."
+        message="For now, we recommend using a desktop or laptop for the best experience."
+        secondaryLabel="Explore playgrounds"
+        secondaryHref="/playground"
+        primaryLabel="Go back home"
+        primaryHref="/"
+      />
 
       {/* Save toast */}
       {saveToast && (
@@ -854,7 +874,7 @@ export default function V1ProjectPage() {
             onSave={handleSave}
             isRunning={isRunning}
             isRunningTests={pty.testState.isRunning}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={null}
             language={language}
             loadingFile={loadingFile}
           />

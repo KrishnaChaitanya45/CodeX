@@ -34,21 +34,36 @@ func (s *service) Close() error {
 // GetQuestBySlug loads a full quest with its associations
 func (s *service) GetQuestBySlug(slug string) (*database.Quest, error) {
 	var quest database.Quest
+
 	err := s.db.
 		Preload("Category").
 		Preload("TechStack").
 		Preload("Topics").
 		Preload("Difficulty").
 		Preload("FinalTestCases").
-		Preload("Checkpoints").
-		Preload("Checkpoints.Testcases").
-		Preload("Checkpoints.Topics").
-		Preload("Checkpoints.Hints").
-		Preload("Checkpoints.Resources").
 		First(&quest, "slug = ?", slug).Error
+
 	if err != nil {
 		return nil, err
 	}
+
+	var checkpoints []database.Checkpoint
+	err = s.db.
+		Where("quest_id = ?", quest.ID).
+		Order("order_index IS NULL ASC").
+		Order("order_index ASC").
+		Order("created_at ASC").
+		Preload("Testcases").
+		Preload("Topics").
+		Preload("Hints").
+		Preload("Resources").
+		Find(&checkpoints).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	quest.Checkpoints = checkpoints
 	return &quest, nil
 }
 

@@ -11,6 +11,7 @@ var (
 	FS_EDIT_FILE_META      = "fs_edit_file_meta"
 	FS_FETCH_QUEST_META    = "fs_fetch_quest_meta"
 	FS_INITIALIZE_CLIENT   = "fs_initialize_client"
+	SYNC_FILES_TO_S3       = "fs_sync_files_to_s3"
 )
 
 type InitializeClient struct {

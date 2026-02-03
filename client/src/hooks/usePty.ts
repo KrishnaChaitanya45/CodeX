@@ -31,7 +31,7 @@ export interface TestResult {
 
 export interface TestState {
   isRunning: boolean;
-  currentCheckpoint: string | null;
+  currentCheckpoint: number;
   results: TestResult[];
   error: string | null;
 }
@@ -73,7 +73,7 @@ export function usePty({
   // Test State
   const [testState, setTestState] = useState<TestState>({
     isRunning: false,
-    currentCheckpoint: null,
+    currentCheckpoint: 1,
     results: [],
     error: null
   });
@@ -86,6 +86,24 @@ export function usePty({
     onDataRef.current = onTerminalData;
     onReadyRef.current = onServerReady;
   }, [onTerminalData, onServerReady]);
+
+  const fetchInitialTestResults = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/test-results/${labId}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const raw = data.testResults ?? [];
+      const normalized: TestResult[] = Array.isArray(raw)
+        ? raw.map((r: any) => normalizeTestResult(r))
+        : [];
+      setTestState(prev => ({
+        ...prev,
+        results: normalized
+      }));
+    } catch (error) {
+      console.error('usePty: Failed to fetch initial test results', error);
+    }
+  }, [labId]);
 
   // --- Connection Logic ---
 
@@ -105,6 +123,7 @@ export function usePty({
       setConnectionState('connected');
       // Send initial heartbeat to establish session liveness
       ws.send(JSON.stringify({ type: 'heartbeat' }));
+      fetchInitialTestResults();
     };
 
     ws.onclose = (event) => {
@@ -144,7 +163,7 @@ export function usePty({
       onDataRef.current?.(raw);
     };
 
-  }, [labId]);
+  }, [labId, fetchInitialTestResults]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
@@ -211,7 +230,7 @@ export function usePty({
         // The backend returns a full result object. 
         // We assume msg.data matches the structure we need or contains a 'results' array.
         const resultData = msg.data;
-        
+
         // Normalize the result to append to our history
         let newResults: TestResult[] = [];
         
@@ -222,11 +241,10 @@ export function usePty({
             // Single result fallback
             newResults = [normalizeTestResult(resultData)];
         }
-
         setTestState(prev => ({
           ...prev,
           isRunning: false,
-          currentCheckpoint: null,
+          currentCheckpoint: msg.data.activeCheckpoint,
           results: [...prev.results, ...newResults]
         }));
         break;

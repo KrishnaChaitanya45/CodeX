@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"lms_v0/utils"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -54,6 +57,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.HandlerFunc(http.MethodPost, "/v1/start/quest", s.StartQuestHandler)
 	r.HandlerFunc(http.MethodPost, "/v1/end/quest", s.EndLabHandler)
 	r.HandlerFunc(http.MethodDelete, "/v1/delete/quest", s.DeleteLabHandler)
+	r.HandlerFunc(http.MethodPost, "/auth/github/sync", s.SyncUserHandler)
 
 	return corsWrapper
 }
@@ -126,6 +130,7 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Language string `json:"language"`
 		LabID    string `json:"labId"`
+		UserId   string `json:"userId"`
 	}
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
@@ -133,6 +138,9 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	language := req.Language
 	labId := req.LabID
+	userId := req.UserId
+
+	fmt.Printf("DEBUG: CALLED THE USER WITH LABID %s and language %s with User ID %s\n", labId, language, userId)
 	if language == "" {
 		http.Error(w, "Missing language query parameter", http.StatusBadRequest)
 		return
@@ -142,32 +150,80 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing labId query parameter", http.StatusBadRequest)
 		return
 	}
+
+	if userId != "" {
+
+		err := s.db.ValidateUserAndLimits(userId)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
+
+	//TODO: Check If Lab ID Exists, before copying and making new lab
+	fmt.Printf("DEBUG TRYING GET THE LAB ID %s\n", labId)
+	lab, err, labExists := s.db.GetLabById(labId)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get lab by ID: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("DEBUG LAB EXISTS %v\n", labExists)
+
 	sourceKey := fmt.Sprintf("boilerplate/%s", language)
 	destinationKey := fmt.Sprintf("code/%s/%s", language, labId)
+
+	if userId != "" {
+		destinationKey = fmt.Sprintf("code/%s/playgrounds/%s/%s", userId, language, labId)
+	}
+
+	codeLink := sourceKey
+
+	if userId != "" && !labExists {
+		codeLink = destinationKey
+	} else if labExists {
+		log.Printf("DEBUG: LAB EXISTS WITH CODE LINK %s", lab.CodeLink)
+		codeLink = lab.CodeLink
+	}
+	if !labExists && userId != "" {
+		fmt.Printf("DEBUG: LAB NOT FOUND< CREATING LAB AND ADDING IT TO USER WITH ID %s and codeLink %s\n", userId, codeLink)
+		lab, err = s.db.CreateLabForUser(userId, labId, language, codeLink, uuid.UUID{}, "playground")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create lab for user: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
 	log.Printf("Copying content from %s to %s", sourceKey, destinationKey)
 
 	labInstance := utils.LabInstanceEntry{
 		Language:       language,
 		LabID:          labId,
+		UserId:         userId,
+		CodeLink:       codeLink,
 		CreatedAt:      time.Now().Unix(),
 		Status:         utils.Created,
 		LastUpdatedAt:  time.Now().Unix(),
 		ProgressLogs:   []utils.LabProgressEntry{},
-		DirtyReadPaths: []string{},
+		DirtyReadPaths: []utils.DirtyFileEntry{},
 	}
 	utils.RedisUtilsInstance.CreateLabInstance(labInstance)
-	// err = utils.CopyS3Folder(sourceKey, destinationKey)
-	// if err != nil {
-	// 	http.Error(w, fmt.Sprintf("Failed to copy content to S3: %v", err), http.StatusInternalServerError)
-	// 	return
-	// }
+	if !labExists {
+		err = utils.CopyS3Folder(sourceKey, destinationKey)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to copy content to S3: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Printf("DEBUG: SPINNING UP LAB WITH CODE LINK %s\n", codeLink)
 
 	params := k8s.SpinUpParams{
 		LabID:                 labId,
 		Language:              language,
 		AppName:               fmt.Sprintf("%s-%s", language, labId),
 		S3Bucket:              os.Getenv("AWS_S3_BUCKET_NAME"),
-		S3Key:                 sourceKey,
+		CodeLink:              codeLink,
+		S3Key:                 codeLink,
 		Namespace:             "devsarena",
 		ShouldCreateNamespace: true,
 	}
@@ -203,6 +259,7 @@ func (s *Server) StartLabHandler(w http.ResponseWriter, r *http.Request) {
 type StartQuestRequest struct {
 	Language    string `json:"language"`
 	ProjectSlug string `json:"projectSlug"`
+	UserId      string `json:userId`
 	LabID       string `json:"labId"`
 }
 
@@ -216,7 +273,6 @@ type StartQuestResponse struct {
 
 func (s *Server) StartQuestHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
 	// Parse request
 	var req StartQuestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -255,6 +311,24 @@ func (s *Server) StartQuestHandler(w http.ResponseWriter, r *http.Request) {
 		req.LabID = uuid.New().String()
 	}
 
+	if req.UserId == "" {
+		response := StartQuestResponse{
+			Success: false,
+			Error:   "Missing userId parameter",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userId := req.UserId
+	language := req.Language
+	labId := req.LabID
+	err := s.db.ValidateUserAndLimits(userId)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
 	// Check concurrent lab limits
 	utils.RedisUtilsInstance.CreateLabProgressQueueIfNotExists()
 	utils.RedisUtilsInstance.CreateLabMonitoringQueueIfNotExists()
@@ -290,7 +364,14 @@ func (s *Server) StartQuestHandler(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
+	fmt.Printf("DEBUG TRYING GET THE LAB ID %s\n", req.LabID)
+	lab, err, labExists := s.db.GetLabById(req.LabID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get lab by ID: %v", err), http.StatusInternalServerError)
+		return
+	}
 
+	fmt.Printf("DEBUG LAB EXISTS %v\n", labExists)
 	// Initialize K8s client
 	if err := k8s.InitK8sClient(); err != nil {
 		log.Printf("Failed to initialize kubernetes client: %v", err)
@@ -303,27 +384,68 @@ func (s *Server) StartQuestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sourceKey := quest.BoilerPlateCode
+	destinationKey := fmt.Sprintf("code/%s/projects/%s/%s/%s", userId, language, quest.Slug, labId)
+
+	codeLink := destinationKey
+
+	if labExists {
+		codeLink = lab.CodeLink
+	} else {
+		fmt.Printf("DEBUG: LAB NOT FOUND< CREATING LAB AND ADDING IT TO USER WITH ID %s and codeLink %s\n", userId, codeLink)
+		lab, err = s.db.CreateLabForUser(userId, labId, language, codeLink, quest.ID, "project")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create lab for user: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+	log.Printf("Copying content from %s to %s", sourceKey, destinationKey)
+	if !labExists {
+		err = utils.CopyS3Folder(sourceKey, destinationKey)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to copy content to S3: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
 	// Prepare quest parameters
 	questParams := k8s.SpinUpQuestParams{
 		LabID:                 req.LabID,
 		Language:              req.Language,
 		ProjectSlug:           req.ProjectSlug,
+		CodeLink:              codeLink,
 		S3Bucket:              os.Getenv("AWS_S3_BUCKET_NAME"),
-		BoilerplateKey:        quest.BoilerPlateCode, // URL from database
-		TestFilesKey:          "",                    // Will be set automatically to devsarena/projects/{projectSlug}/tests/
+		BoilerplateKey:        codeLink, // URL from database
+		TestFilesKey:          "",
 		Namespace:             "devsarena",
 		ShouldCreateNamespace: true,
 	}
 
+	testResults :=
+		[]utils.TestResult{}
+	if labExists {
+		err := json.Unmarshal(lab.TestResults, &testResults)
+		if err != nil {
+			log.Printf("Failed to unmarshal test results: %v", err)
+			testResults = []utils.TestResult{}
+		}
+	}
+
+	activeCheckpoint := 1
+	if labExists {
+		activeCheckpoint = lab.ActiveCheckpoint
+	}
 	// Create lab instance in Redis
 	labInstance := utils.LabInstanceEntry{
-		Language:       req.Language,
-		LabID:          req.LabID,
-		CreatedAt:      time.Now().Unix(),
-		Status:         utils.Created,
-		LastUpdatedAt:  time.Now().Unix(),
-		ProgressLogs:   []utils.LabProgressEntry{},
-		DirtyReadPaths: []string{},
+		Language:         req.Language,
+		LabID:            req.LabID,
+		CodeLink:         codeLink,
+		CreatedAt:        time.Now().Unix(),
+		Status:           utils.Created,
+		ActiveCheckpoint: activeCheckpoint,
+		LastUpdatedAt:    time.Now().Unix(),
+		ProgressLogs:     []utils.LabProgressEntry{},
+		DirtyReadPaths:   []utils.DirtyFileEntry{},
+		TestResults:      testResults,
 	}
 	utils.RedisUtilsInstance.CreateLabInstance(labInstance)
 
@@ -370,6 +492,28 @@ func (s *Server) EndLabHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing language or labId in request body", http.StatusBadRequest)
 		return
 	}
+	log.Printf("DEBUG: TRYING TO GET THE LAB INSTANCE with ID %s", labId)
+	labInstanceDetails, err := utils.RedisUtilsInstance.GetLabInstance(labId)
+	if err != nil {
+		log.Printf("DEBUG: FAILED TO GET THE LAB ID %v", err.Error())
+		http.Error(w, "Lab instance not found", http.StatusNotFound)
+		return
+	}
+
+	lab, err, labExistsInDB := s.db.GetLabById(labId)
+
+	if labExistsInDB {
+		err := s.db.SyncLabProgress(context.TODO(), lab, *labInstanceDetails)
+		if err != nil {
+			// TODO: REPORT THIS ERROR IN MIXPANEL MOVING FORWARD
+			log.Printf("FAILED TO SYNC LAB PROGRESS %v\n", err.Error())
+		}
+		//? AN INTERNAL API TO TRIGGER RUNNER SERVICE TO SYNC DIRTY READS
+		err = s.TriggerS3SyncFromRunner(labId)
+		if err != nil {
+			log.Printf("FAILED TO SYNC LAB PROGRESS FROM RUNNER %v\n", err.Error())
+		}
+	}
 
 	params := struct {
 		LabID     string
@@ -383,7 +527,7 @@ func (s *Server) EndLabHandler(w http.ResponseWriter, r *http.Request) {
 		Namespace: "devsarena",
 	}
 
-	err := k8s.InitK8sClient()
+	err = k8s.InitK8sClient()
 	if err != nil {
 		log.Printf("Failed to initialize kubernetes client: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to initialize kubernetes client: %v", err), http.StatusInternalServerError)
@@ -400,6 +544,43 @@ func (s *Server) EndLabHandler(w http.ResponseWriter, r *http.Request) {
 	utils.RedisUtilsInstance.RemoveLabInstance(labId)
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) TriggerS3SyncFromRunner(labId string) error {
+	u := url.URL{
+		Scheme: "wss",
+		Host:   fmt.Sprintf("%s.devsarena.in", labId),
+		Path:   "/fs",
+	}
+
+	log.Printf("Triggering S3 Sync: Connecting to %s", u.String())
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 5 * time.Second,
+	}
+	conn, _, err := dialer.Dial(u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to dial runner websocket: %w", err)
+	}
+
+	defer conn.Close()
+	message := map[string]interface{}{
+		"type":    "fs_sync_files_to_s3",
+		"payload": map[string]string{}, // Payload can be empty as per your runner logic
+	}
+
+	// 4. Send the Message
+	if err := conn.WriteJSON(message); err != nil {
+		return fmt.Errorf("failed to write sync message to websocket: %w", err)
+	}
+	conn.SetReadDeadline(time.Now().Add(8 * time.Second))
+	_, _, err = conn.ReadMessage()
+	if err != nil {
+		// It's okay if we time out reading the response, as long as the write succeeded.
+		log.Printf("Warning: No immediate response from runner sync (might be processing): %v", err)
+	}
+
+	log.Printf("Successfully triggered S3 sync for LabID: %s", labId)
+	return nil
 }
 
 func (s *Server) GetQuestsHandler(w http.ResponseWriter, r *http.Request) {
@@ -746,4 +927,37 @@ func (s *Server) GetTestResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) SyncUserHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Verify Secret
+	if r.Header.Get("X-Internal-Secret") != os.Getenv("INTERNAL_API_SECRET") {
+		fmt.Printf("DEBUG: Unauthorized access attempt %v didnt match with %v\n", r.Header.Get("X-Internal-Secret"), os.Getenv("INTERNAL_API_SECRET"))
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Parse Body
+	var req database.SyncUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fmt.Printf("DEBUG: BODY DECODE ERROR %v", err.Error())
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Sync DB
+	user, err := s.db.SyncUser(req)
+	if err != nil {
+		log.Printf("Sync error: %v", err)
+		http.Error(w, "Sync failed", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("DEBUG: ALL GOOD SENDING THE REPSNSE\n")
+	// 4. Respond with UUID
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"user_id": user.ID.String(),
+		"success": "true",
+	})
 }

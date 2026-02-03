@@ -76,7 +76,6 @@ func (s *service) GetQuestBySlug(slug string) (*database.Quest, error) {
 		Order("order_index IS NULL ASC").
 		Order("order_index ASC").
 		Order("created_at ASC").
-		Order("id ASC").
 		Preload("Testcases").
 		Preload("Topics").
 		Preload("Hints").

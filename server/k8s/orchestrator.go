@@ -24,6 +24,7 @@ var sslStartTime time.Time
 type SpinUpParams struct {
 	LabID                 string
 	Language              string
+	CodeLink              string
 	AppName               string
 	S3Bucket              string
 	S3Key                 string
@@ -36,6 +37,7 @@ type SpinUpQuestParams struct {
 	LabID                 string
 	Language              string
 	ProjectSlug           string
+	CodeLink              string
 	S3Bucket              string
 	BoilerplateKey        string
 	TestFilesKey          string
@@ -49,6 +51,7 @@ type SpinUpWithInit struct {
 	AppName               string
 	S3Bucket              string
 	S3Key                 string
+	CodeLink              string
 	Namespace             string
 	ShouldCreateNamespace bool
 	RequiresInitCommand   *string
@@ -196,6 +199,7 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 		Language:              params.Language,
 		AppName:               params.AppName,
 		S3Bucket:              params.S3Bucket,
+		CodeLink:              params.CodeLink,
 		S3Key:                 params.S3Key,
 		Namespace:             params.Namespace,
 		ShouldCreateNamespace: params.ShouldCreateNamespace,
@@ -230,7 +234,7 @@ func SpinUpPodWithLanguage(params SpinUpParams) error {
 
 // SpinUpQuestPod creates a pod environment specifically for quest-based projects with separate test file handling
 func SpinUpQuestPod(params SpinUpQuestParams) error {
-	log.Printf("Starting to spin up quest pod for LabID: %s, ProjectSlug: %s, Language: %s", params.LabID, params.ProjectSlug, params.Language)
+	log.Printf("Starting to spin up quest pod for LabID: %s, ProjectSlug: %s, Language: %s AND CODE LINK %s", params.LabID, params.ProjectSlug, params.Language, params.CodeLink)
 
 	progress := utils.LabProgressEntry{
 		Timestamp:   time.Now().Unix(),
@@ -267,12 +271,14 @@ func SpinUpQuestPod(params SpinUpQuestParams) error {
 
 	// Convert quest params to deployment params
 	deploymentParams := SpinUpWithInit{
-		LabID:                 params.LabID,
-		Language:              params.Language,
-		AppName:               fmt.Sprintf("%s-%s", params.Language, params.LabID),
-		S3Bucket:              params.S3Bucket,
-		S3Key:                 fmt.Sprintf("quests/%s/%s", params.ProjectSlug, params.LabID), // Quest-specific workspace path
-		Namespace:             params.Namespace,
+		LabID:     params.LabID,
+		Language:  params.Language,
+		AppName:   fmt.Sprintf("%s-%s", params.Language, params.LabID),
+		CodeLink:  params.CodeLink,
+		S3Bucket:  params.S3Bucket,
+		S3Key:     fmt.Sprintf("quests/%s/%s", params.ProjectSlug, params.LabID), // Quest-specific workspace path
+		Namespace: params.Namespace,
+
 		ShouldCreateNamespace: params.ShouldCreateNamespace,
 		RequiresInitCommand:   requiresInitCmdPtr,
 	}
@@ -283,6 +289,7 @@ func SpinUpQuestPod(params SpinUpQuestParams) error {
 		Language:              params.Language,
 		AppName:               deploymentParams.AppName,
 		S3Bucket:              params.S3Bucket,
+		CodeLink:              params.CodeLink,
 		S3Key:                 deploymentParams.S3Key,
 		Namespace:             params.Namespace,
 		ShouldCreateNamespace: params.ShouldCreateNamespace,
@@ -396,8 +403,6 @@ func CreateDeploymentFromYamlIfDoesNotExists(params SpinUpWithInit) error {
 		return fmt.Errorf("error executing template: %w", err)
 	}
 
-	log.Printf("DEBUG: Processed deployment YAML for LabID '%s':\n%s", params.LabID, processedYaml.String())
-
 	var deployment appsv1.Deployment
 	if err := yaml.Unmarshal(processedYaml.Bytes(), &deployment); err != nil {
 		log.Printf("Error unmarshalling deployment YAML for LabID '%s': %v", params.LabID, err)
@@ -460,8 +465,6 @@ func CreateQuestDeploymentFromYamlIfDoesNotExists(params SpinUpQuestParams, requ
 		log.Printf("Error executing quest deployment template for LabID '%s': %v", params.LabID, err)
 		return fmt.Errorf("error executing quest template: %w", err)
 	}
-
-	log.Printf("DEBUG: Processed quest deployment YAML for LabID '%s':\n%s", params.LabID, processedYaml.String())
 
 	var deployment appsv1.Deployment
 	if err := yaml.Unmarshal(processedYaml.Bytes(), &deployment); err != nil {

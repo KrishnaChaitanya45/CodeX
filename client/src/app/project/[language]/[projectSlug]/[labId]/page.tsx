@@ -17,6 +17,7 @@ import { PLAYGROUND_OPTIONS } from "@/constants/playground";
 import { dlog } from "@/utils/debug";
 import { usePty } from "@/hooks/usePty";
 import type { TerminalHandle } from "@/components/editor/Terminal";
+import { MobileSupportModal } from "@/components/common/MobileSupportModal";
 
 interface LogEntry {
   type: "info" | "success" | "error" | "warning";
@@ -61,10 +62,20 @@ export default function ExperimentalProjectPage() {
   const language = getParamString(params?.language) || "html";
   const labId = getParamString(params?.labId) || "test-lab";
   const projectSlug = getParamString(params?.projectSlug) || "test-slug";
+  const [isMobile, setIsMobile] = useState(false);
   // Find the current playground option based on language
   const currentPlaygroundOption = PLAYGROUND_OPTIONS.find(
     (option) => option.id === language,
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
 
   // Unified bootstrap hook
   const bootstrap = useLabBootstrap({
@@ -72,6 +83,7 @@ export default function ExperimentalProjectPage() {
     isProject: true,
     questSlug: projectSlug,
     language,
+    disabled: isMobile,
     autoConnectPty: false,
     requirePtyForReady: false,
   });
@@ -93,6 +105,8 @@ export default function ExperimentalProjectPage() {
     },
   ]);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [testToast, setTestToast] = useState<string | null>(null);
+  const [connectionToast, setConnectionToast] = useState<string | null>(null);
   const [loadingDone, setLoadingDone] = useState(false);
   const [loadingFile, setLoadingFile] = useState<string | null>(null);
   const [showMaxLabsModal, setShowMaxLabsModal] = useState(false);
@@ -118,6 +132,8 @@ export default function ExperimentalProjectPage() {
   const savingFiles = useRef<Set<string>>(new Set());
   const terminalRef = useRef<TerminalHandle>(null);
   const [previewReloadNonce, setPreviewReloadNonce] = useState<number>(0);
+  const lastTestCountRef = useRef<number>(0);
+
 
   // Initialize PTY Hook
   const pty = usePty({
@@ -142,6 +158,22 @@ export default function ExperimentalProjectPage() {
   });
 
   const isRunning = pty.runStatus.isRunning;
+  useEffect(() => {
+    const count = pty.testState.results.length;
+    if (!pty.testState.isRunning && count > lastTestCountRef.current) {
+      setTestToast("Test run successfully. Head to Test Results tab.");
+      const t = setTimeout(() => setTestToast(null), 3000);
+      lastTestCountRef.current = count;
+      return () => clearTimeout(t);
+    }
+    lastTestCountRef.current = count;
+   }, [pty.testState.isRunning, pty.testState.results.length]);
+
+  const showConnectionToast = useCallback((actionLabel: string) => {
+    setConnectionToast(`Connection not established. Please wait before ${actionLabel}.`);
+    const t = setTimeout(() => setConnectionToast(null), 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   // 3. Connect/Disconnect Lifecycle
   // We trigger connection only when the FileSystem is ready
@@ -716,6 +748,10 @@ export default function ExperimentalProjectPage() {
   );
 
   const handleSubmit = useCallback(async () => {
+    if (pty.connectionState !== "connected") {
+      showConnectionToast("running tests");
+      return;
+    }
     // Check PTY state instead of bootstrap
     if (pty.testState.isRunning) {
       setConsoleLogs((prev) => [
@@ -739,7 +775,7 @@ export default function ExperimentalProjectPage() {
       setActiveRightTab("test-results");
 
       // 3. Determine checkpoint
-      const nextCheckpoint = bootstrap.currentCheckpoint;
+      const nextCheckpoint = pty.testState.currentCheckpoint;
       const checkpointId = `${nextCheckpoint}`;
 
       setConsoleLogs((prev) => [
@@ -780,6 +816,10 @@ export default function ExperimentalProjectPage() {
   // Handle run with smart command execution
   const lastRunCommandRef = useRef<string | null>(null);
   const handleRun = useCallback(async () => {
+    if (pty.connectionState !== "connected") {
+      showConnectionToast("running the project");
+      return;
+    }
     const startList = currentPlaygroundOption?.startCommands || [];
     if (startList.length === 0) {
       setConsoleLogs((prev) => [
@@ -885,7 +925,7 @@ export default function ExperimentalProjectPage() {
         },
       ]);
     }
-  }, [currentPlaygroundOption, bootstrap.fileTree, pty]);
+  }, [currentPlaygroundOption, bootstrap.fileTree, pty, showConnectionToast]);
   if (!loadingDone && !mergedIsReady) {
     return (
       <>
@@ -930,10 +970,29 @@ export default function ExperimentalProjectPage() {
 
   return (
     <div className="h-screen w-screen bg-gray-900 overflow-hidden relative">
+      <MobileSupportModal
+        isOpen={isMobile}
+        subtitle="We’re crafting a touch-friendly lab experience."
+        message="For now, we recommend using a desktop or laptop for the best experience."
+        secondaryLabel="Browse projects"
+        secondaryHref="/projects"
+        primaryLabel="Go back home"
+        primaryHref="/"
+      />
       {/* Save toast */}
       {saveToast && (
-        <div className="absolute top-4 right-4 z-50 bg-green-600 text-white px-3 py-1 rounded text-sm">
+        <div className="absolute top-4 right-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-xl text-sm shadow-lg backdrop-blur border border-green-400/40">
           {saveToast}
+        </div>
+      )}
+      {testToast && (
+        <div className="absolute top-12 right-4 z-50 bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-4 py-2 rounded-xl text-sm shadow-xl backdrop-blur border border-white/10">
+          {testToast}
+        </div>
+      )}
+      {connectionToast && (
+        <div className="absolute top-20 right-4 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 rounded-xl text-sm shadow-xl backdrop-blur border border-white/10">
+          {connectionToast}
         </div>
       )}
 
@@ -975,7 +1034,7 @@ export default function ExperimentalProjectPage() {
             onSave={handleSave}
             isRunning={isRunning}
             isRunningTests={pty.testState.isRunning}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={String(pty.testState.currentCheckpoint)}
             language={language}
             loadingFile={loadingFile}
           />
@@ -1017,10 +1076,10 @@ export default function ExperimentalProjectPage() {
             questMetadata={questMetadata}
             loadingQuestData={loadingQuestData}
             checkpoints={checkpoints}
-            testResults={bootstrap.testResults}
-            isRunningTests={bootstrap.isRunningTests}
-            activeCheckpoint={bootstrap.currentCheckpoint}
-            currentTestingCheckpoint={pty.testState.currentCheckpoint}
+            testResults={pty.testState.results}
+            isRunningTests={pty.testState.isRunning}
+            activeCheckpoint={pty.testState.currentCheckpoint}
+            currentTestingCheckpoint={String(pty.testState.currentCheckpoint)}
             params={{
               language,
               labId,

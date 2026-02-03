@@ -1,16 +1,21 @@
 package database
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"lms_v0/utils"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Get all quests
@@ -90,13 +95,14 @@ func (s *service) GetQuestBySlug(slug string) (*Quest, error) {
 		} else {
 			log.Printf("presign boilerplate: %v", err)
 		}
-	}
-	for i := range quest.Checkpoints {
-		if quest.Checkpoints[i].TestingCode != "" {
-			if presigned, err := utils.GeneratePresignedUrl(bucketName, quest.Checkpoints[i].TestingCode); err == nil {
-				quest.Checkpoints[i].TestingCode = presigned
-			} else {
-				log.Printf("presign checkpoint %s: %v", quest.Checkpoints[i].ID, err)
+
+		for i := range quest.Checkpoints {
+			if quest.Checkpoints[i].TestingCode != "" {
+				if presigned, err := utils.GeneratePresignedUrl(bucketName, quest.Checkpoints[i].TestingCode); err == nil {
+					quest.Checkpoints[i].TestingCode = presigned
+				} else {
+					log.Printf("presign checkpoint %s: %v", quest.Checkpoints[i].ID, err)
+				}
 			}
 		}
 	}
@@ -494,6 +500,173 @@ func (s *service) DeleteQuest(slug string) error {
 	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return nil
+}
+
+// SyncUser performs an upsert (Update or Insert) for a GitHub user
+func (s *service) SyncUser(req SyncUserRequest) (*User, error) {
+	user := User{
+		GithubID:  req.GithubID,
+		Username:  req.Username,
+		Email:     req.Email,
+		AvatarURL: req.AvatarURL,
+		Bio:       req.Bio,
+		GithubURL: req.GithubURL,
+		Name:      req.Name,
+		UpdatedAt: time.Now(),
+	}
+
+	// Upsert: If GithubID exists, update fields. If not, create new.
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "github_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"username", "email", "avatar_url", "bio", "github_url", "name", "updated_at"}),
+	}).Create(&user)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// Ensure we have the ID populated if it was an update
+	if user.ID == uuid.Nil {
+		s.db.Where("github_id = ?", req.GithubID).First(&user)
+	}
+
+	return &user, nil
+}
+
+func (s *service) ValidateUserAndLimits(userId string) error {
+	maxFreePlaygrounds, _ := strconv.Atoi(os.Getenv("MAX_FREE_PLAYGROUNDS"))
+	maxFreeProjects, _ := strconv.Atoi(os.Getenv("MAX_FREE_PROJECTS"))
+
+	user := User{}
+	fmt.Printf("DEBUG: VALIDATING USER WITH USER ID %s\n", userId)
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return fmt.Errorf("INVALID USER ID")
+
+	}
+	fmt.Printf("DEBUG: UUID USER WITH USER ID %s\n", userUUID)
+	err = s.db.Where(&User{ID: userUUID}).First(&user).Error
+	if err != nil {
+		return fmt.Errorf("USER NOT FOUND")
+	}
+	fmt.Printf("DEBUG: FOUND USER WITH USER ID %v", user)
+	playgroundsCount := len(user.Playgrounds)
+	projectsCount := len(user.Projects)
+
+	if playgroundsCount < maxFreePlaygrounds {
+		return nil
+	}
+
+	if projectsCount < maxFreeProjects {
+		return nil
+	}
+
+	return fmt.Errorf("USER LIMIT EXCEEDED")
+}
+
+func (s *service) GetLabById(labId string) (*Lab, error, bool) {
+	lab := Lab{}
+	err := s.db.Where(&Lab{ID: labId}).First(&lab).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, false
+		}
+		return nil, err, false
+	}
+	return &lab, nil, true
+}
+func (s *service) CreateLabForUser(userId string, labId string, language string, codeLink string, questId uuid.UUID, labType string) (*Lab, error) {
+	// Parse userId to UUID
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Find or create technology
+	var technology *Technology
+	technology, err = s.findTechnology(s.db, language)
+
+	// Create lab
+	lab := Lab{
+		ID:            labId,         // Assuming ID is string
+		UserID:        userUUID,      // Assuming UserID is string
+		TechnologyID:  technology.ID, // Assuming TechnologyID is string
+		CodeLink:      codeLink,
+		CreatedAt:     time.Now(),
+		LastUpdatedAt: time.Now(),
+		Language:      language,
+		QuestID:       &questId,
+	}
+	// Create in database
+	if err := s.db.Create(&lab).Error; err != nil {
+		return nil, fmt.Errorf("failed to create lab: %v", err)
+	}
+
+	// Update User Table with new playground
+
+	user := User{}
+	if err := s.db.Find(&user, userUUID).Error; err != nil {
+		return nil, fmt.Errorf("failed to find user: %v", err)
+	}
+	if labType == "playground" {
+		user.Playgrounds = append(user.Playgrounds, lab)
+	} else {
+		user.Projects = append(user.Projects, lab)
+	}
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to update user: %v", err)
+	}
+
+	return &lab, nil
+}
+
+func (s *service) GetUserProjects(userID uuid.UUID) ([]Lab, error) {
+	var projects []Lab
+
+	result := s.db.Where("user_id = ? AND type = ?", userID, "project").Find(&projects)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return projects, nil
+}
+
+func (s *service) SyncLabProgress(ctx context.Context, lab *Lab, labDetails utils.LabInstanceEntry) error {
+
+	// 1. Sync Timestamps (Redis uses int64 Unix, DB uses time.Time)
+	if labDetails.LastUpdatedAt > 0 {
+		lab.LastUpdatedAt = time.Unix(labDetails.LastUpdatedAt, 0)
+	}
+
+	lab.Status = "ended"
+
+	if len(labDetails.ProgressLogs) > 0 {
+		logsJSON, err := json.Marshal(labDetails.ProgressLogs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal progress logs: %w", err)
+		}
+		lab.ProgressLogs = logsJSON
+	}
+
+	if len(labDetails.TestResults) > 0 {
+		resultsJSON, err := json.Marshal(labDetails.TestResults)
+		if err != nil {
+			return err
+		}
+		lab.TestResults = resultsJSON
+	}
+
+	if labDetails.ActiveCheckpoint > 0 {
+		lab.ActiveCheckpoint = labDetails.ActiveCheckpoint
+	}
+
+	if err := s.db.WithContext(ctx).Model(lab).Updates(lab).Error; err != nil {
+		return fmt.Errorf("failed to sync lab progress to db: %w", err)
 	}
 
 	return nil

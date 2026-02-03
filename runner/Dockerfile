@@ -14,6 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/runner .
 # Use alpine as the base image. It's very small but includes the 'sh' shell.
 FROM alpine:latest
 
+RUN apk add --no-cache ca-certificates
 # Create a non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 

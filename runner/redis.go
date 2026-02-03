@@ -42,14 +42,38 @@ const (
 	K8S_SERVICE         LabLogServices = "k8s"
 )
 
+type DirtyFileEntry struct {
+	Path   string `json:"path"`
+	Action string `json:"action"` // "edit" or "delete"
+}
+
+type DevsArenaRunnerError struct {
+	Type     string `json:"type,omitempty"`
+	Message  string `json:"message,omitempty"`
+	Scenario string `json:"scenario,omitempty"`
+	Expected string `json:"expected,omitempty"`
+	Received string `json:"received,omitempty"`
+	Hint     string `json:"hint,omitempty"`
+}
+
+type DevsArenaRunnerResult struct {
+	Checkpoint int                   `json:"checkpoint"`
+	Status     string                `json:"status"`
+	DurationMs int64                 `json:"durationMs"`
+	Error      *DevsArenaRunnerError `json:"error,omitempty"`
+}
+
 type LabInstanceEntry struct {
-	LabID          string
-	CreatedAt      int64
-	Language       string
-	DirtyReadPaths []string
-	Status         LabStatus
-	LastUpdatedAt  int64
-	ProgressLogs   []LabProgressEntry
+	LabID            string
+	CreatedAt        int64
+	CodeLink         string
+	Language         string
+	DirtyReadPaths   []DirtyFileEntry
+	Status           LabStatus
+	ActiveCheckpoint int `json:"activeCheckpoint"`
+	LastUpdatedAt    int64
+	TestResults      []DevsArenaRunnerResult `json:"testResults"`
+	ProgressLogs     []LabProgressEntry
 }
 
 type LabMonitoringEntry struct {
@@ -165,4 +189,111 @@ func UpdateLabMonitorQueue(labID string) {
 	}
 
 	log.Printf("Lab %s not found in monitor queue, skipping update", labID)
+}
+func UpdateLabInstanceDirtyWrites(labID string, filePath string, action string) {
+	if RedisClient == nil {
+		log.Fatalf("Redis client is not initialized")
+	}
+
+	data, err := RedisClient.HGet(Context, "lab_instances", labID).Result()
+	if err != nil {
+		log.Printf("Failed to fetch lab instance %s: %v", labID, err)
+		return
+	}
+
+	var instance LabInstanceEntry
+	if err := json.Unmarshal([]byte(data), &instance); err != nil {
+		log.Printf("Failed to unmarshal lab instance: %v", err)
+		return
+	}
+
+	found := false
+	for i, entry := range instance.DirtyReadPaths {
+		if entry.Path == filePath {
+			instance.DirtyReadPaths[i].Action = action
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		instance.DirtyReadPaths = append(instance.DirtyReadPaths, DirtyFileEntry{
+			Path:   filePath,
+			Action: action,
+		})
+	}
+
+	instance.LastUpdatedAt = time.Now().Unix()
+	saveInstance(labID, instance)
+}
+
+// 4. NEW: Function to handle Rename specifically
+func UpdateLabInstanceDirtyRename(labID string, oldPath string, newPath string) {
+	if RedisClient == nil {
+		return
+	}
+
+	data, err := RedisClient.HGet(Context, "lab_instances", labID).Result()
+	if err != nil {
+		return
+	}
+
+	var instance LabInstanceEntry
+	if err := json.Unmarshal([]byte(data), &instance); err != nil {
+		return
+	}
+
+	found := false
+	for i, entry := range instance.DirtyReadPaths {
+		if entry.Path == oldPath {
+			instance.DirtyReadPaths[i].Path = newPath
+			// We keep the previous action (likely "edit") or force "edit"
+			instance.DirtyReadPaths[i].Action = "edit"
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// Was clean on S3, so we need to delete old and upload new
+		instance.DirtyReadPaths = append(instance.DirtyReadPaths,
+			DirtyFileEntry{Path: oldPath, Action: "delete"},
+			DirtyFileEntry{Path: newPath, Action: "edit"},
+		)
+	}
+
+	instance.LastUpdatedAt = time.Now().Unix()
+	saveInstance(labID, instance)
+}
+
+// Helper to save instance back to Redis
+func saveInstance(labID string, instance LabInstanceEntry) {
+	updatedData, err := json.Marshal(instance)
+	if err != nil {
+		log.Printf("Failed to marshal lab instance: %v", err)
+		return
+	}
+	err = RedisClient.HSet(Context, "lab_instances", labID, updatedData).Err()
+	if err != nil {
+		log.Printf("Failed to update lab instance %s: %v", labID, err)
+	}
+}
+
+func GetLabInstance(labID string) (*LabInstanceEntry, error) {
+	if RedisClient == nil {
+		log.Fatalf("Redis client is not initialized")
+	}
+
+	data, err := RedisClient.HGet(Context, "lab_instances", labID).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var instance LabInstanceEntry
+	err = json.Unmarshal([]byte(data), &instance)
+	if err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
 }

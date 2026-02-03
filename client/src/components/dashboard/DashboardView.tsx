@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowRight, 
@@ -12,6 +12,7 @@ import {
   Send,
   AlertCircle, HardDrive
 } from "lucide-react";
+import { MobileSupportModal } from "@/components/common/MobileSupportModal";
 
 type DashboardItem = {
   id: string;
@@ -67,7 +68,18 @@ export default function DashboardView({
   const [sidebarOpen, setSidebarOpen] = useState<ViewType>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
 
   const displayName = user?.name?.split(" ")[0] || user?.username || "Builder";
 
@@ -81,6 +93,10 @@ export default function DashboardView({
   }, [sidebarOpen, searchQuery, data.projects, data.playgrounds]);
 
   const handleStartLab = async (item: DashboardItem) => {
+    if (isMobile) {
+      setShowMobileModal(true);
+      return;
+    }
     if (actionLoadingId) return;
     setActionLoadingId(item.id);
     try {
@@ -128,6 +144,16 @@ export default function DashboardView({
 
   return (
     <div className="relative mt-12 min-h-screen">
+      <MobileSupportModal
+        subtitle="Mobile lab support is arriving soon."
+        message="We recommend using a desktop or laptop to start labs from your dashboard right now."
+        secondaryLabel="Browse projects"
+        secondaryHref="/projects"
+        primaryLabel="Go back home"
+        primaryHref="/"
+        isOpen={showMobileModal}
+        onClose={() => setShowMobileModal(false)}
+      />
       {/* --- Main Content --- */}
       <div className={`relative z-10 mx-auto max-w-5xl px-6 py-12 transition-transform duration-500 ${sidebarOpen ? '-translate-x-10 opacity-50' : ''}`}>
         

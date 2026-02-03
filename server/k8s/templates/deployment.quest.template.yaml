@@ -168,8 +168,8 @@ spec:
               cpu: "100m"
               memory: "128Mi"
             limits:
-              cpu: "256m"
-              memory: "256Mi"
+              cpu: "512m"
+              memory: "512Mi"
           securityContext:
             runAsUser: 1001
             runAsGroup: 1001
@@ -179,6 +179,8 @@ spec:
               drop:
                 - ALL
           env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=200"
             - name: REDIS_URI
               valueFrom:
                 secretKeyRef:
@@ -212,7 +214,7 @@ spec:
           workingDir: /workspace
 
         - name: pty-container
-          image: krishnawyvern/devsarena-pty-relay:v2.7
+          image: krishnawyvern/devsarena-pty-relay:v2.7.1
           ports:
             - name: pty-ws
               containerPort: 8082
@@ -258,7 +260,7 @@ spec:
           workingDir: /workspace
 
         - name: runner-container
-          image: krishnawyvern/devsarena-runner-service:v1.3
+          image: krishnawyvern/devsarena-runner-service:v1.7.7
           ports:
             - name: fs-ws
               containerPort: 8081
@@ -283,6 +285,8 @@ spec:
           env:
             - name: LAB_ID
               value: '{{.LabID}}'
+            - name: LAB_CODE_LINK
+              value: '{{.CodeLink}}'
             - name: PROJECT_SLUG
               value: '{{.ProjectSlug}}'
             - name: QUEST_MODE

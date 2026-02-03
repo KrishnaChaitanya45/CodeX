@@ -392,7 +392,7 @@ func DeleteR2Folder(language, labId string) error {
 	}
 
 	// Construct the folder path to delete
-	folderKey := fmt.Sprintf("code/%s/%s/", language, labId)
+	folderKey := "code/0d388aa2-3033-4eed-8e60-e00dcc47205c/playgrounds/react/"
 
 	log.Printf("Starting deletion of folder: s3://%s/%s", bucket, folderKey)
 

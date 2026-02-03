@@ -14,6 +14,22 @@ beforeEach(() => {
   }
 });
 
+afterEach(() => {
+  if (typeof document !== "undefined") {
+    // Clean up any lingering timers, event listeners, etc.
+    // Force unmount any remaining React roots
+    const root = document.getElementById('root');
+    if (root && root._reactRootContainer) {
+      try {
+        root._reactRootContainer.unmount();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    document.body.innerHTML = '';
+  }
+});
+
 globalThis.bySelector = function (container, selector, hint) {
   const el = container?.querySelector?.(selector);
   if (!el) {

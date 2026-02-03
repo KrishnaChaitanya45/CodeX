@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,8 +12,11 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	"lms_v0/internal/aws"
 	"lms_v0/internal/database"
 	"lms_v0/internal/redis"
 	"lms_v0/k8s"
@@ -23,6 +27,7 @@ type StartQuestRequest struct {
 	Language    string `json:"language"`
 	ProjectSlug string `json:"projectSlug"`
 	LabID       string `json:"labId"`
+	UserId      string `json:userId`
 }
 
 type StartQuestResponse struct {
@@ -57,19 +62,36 @@ func (s *service) Close() error {
 // Implement only the methods we need; others are stubs
 func (s *service) GetQuestBySlug(slug string) (*database.Quest, error) {
 	var quest database.Quest
-	// mirror internal/database.GetQuestBySlug preloads
+
 	err := s.db.
 		Preload("Category").
 		Preload("TechStack").
 		Preload("Topics").
 		Preload("Difficulty").
 		Preload("FinalTestCases").
-		Preload("Checkpoints").
-		Preload("Checkpoints.Testcases").
-		Preload("Checkpoints.Topics").
-		Preload("Checkpoints.Hints").
-		Preload("Checkpoints.Resources").
 		First(&quest, "slug = ?", slug).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	var checkpoints []database.Checkpoint
+	err = s.db.
+		Where("quest_id = ?", quest.ID).
+		Order("order_index IS NULL ASC").
+		Order("order_index ASC").
+		Order("created_at ASC").
+		Preload("Testcases").
+		Preload("Topics").
+		Preload("Hints").
+		Preload("Resources").
+		Find(&checkpoints).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	quest.Checkpoints = checkpoints
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +119,136 @@ func (s *service) AddQuest(database.AddQuestRequest) (string, error) {
 }
 func (s *service) DeleteQuest(string) error { return fmt.Errorf("not implemented") }
 
+func (s *service) SyncUser(req database.SyncUserRequest) (*database.User, error) {
+	user := database.User{
+		GithubID:  req.GithubID,
+		Username:  req.Username,
+		Email:     req.Email,
+		AvatarURL: req.AvatarURL,
+		Bio:       req.Bio,
+		GithubURL: req.GithubURL,
+		Name:      req.Name,
+		UpdatedAt: time.Now(),
+	}
+
+	// Upsert: If GithubID exists, update fields. If not, create new.
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "github_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"username", "email", "avatar_url", "bio", "github_url", "name", "updated_at"}),
+	}).Create(&user)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// Ensure we have the ID populated if it was an update
+	if user.ID == uuid.Nil {
+		s.db.Where("github_id = ?", req.GithubID).First(&user)
+	}
+
+	return &user, nil
+}
+
+func (s *service) ValidateUserAndLimits(userId string) error {
+	maxFreeProjects, _ := strconv.Atoi(os.Getenv("MAX_FREE_PROJECTS"))
+
+	user := database.User{}
+	fmt.Printf("DEBUG: VALIDATING USER WITH USER ID %s\n", userId)
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return fmt.Errorf("INVALID USER ID")
+
+	}
+	fmt.Printf("DEBUG: UUID USER WITH USER ID %s\n", userUUID)
+	err = s.db.Where(&database.User{ID: userUUID}).First(&user).Error
+	if err != nil {
+		return fmt.Errorf("USER NOT FOUND")
+	}
+	fmt.Printf("DEBUG: FOUND USER WITH USER ID %v", user)
+	projectsCount := len(user.Projects)
+
+	if projectsCount < maxFreeProjects {
+		return nil
+	}
+
+	return fmt.Errorf("USER LIMIT EXCEEDED")
+}
+
+func (s *service) findTechnology(tx *gorm.DB, name string) (*database.Technology, error) {
+	var tech database.Technology
+	result := tx.Where("name = ?", name).First(&tech)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &tech, nil
+}
+
+func (s *service) GetLabById(labId string) (*database.Lab, error, bool) {
+	lab := database.Lab{}
+	err := s.db.Where(&database.Lab{ID: labId}).First(&lab).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, false
+		}
+		return nil, err, false
+	}
+	return &lab, nil, true
+}
+func (s *service) CreateLabForUser(userId string, labId string, language string, codeLink string, questId uuid.UUID, labType string) (*database.Lab, error) {
+	// Parse userId to UUID
+	userUUID, err := uuid.Parse(userId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Find or create technology
+	var technology *database.Technology
+	technology, err = s.findTechnology(s.db, language)
+
+	// Create lab
+	lab := database.Lab{
+		ID:            labId,         // Assuming ID is string
+		UserID:        userUUID,      // Assuming UserID is string
+		TechnologyID:  technology.ID, // Assuming TechnologyID is string
+		CodeLink:      codeLink,
+		CreatedAt:     time.Now(),
+		LastUpdatedAt: time.Now(),
+		Language:      language,
+		QuestID:       &questId,
+	}
+	// Create in database
+	if err := s.db.Create(&lab).Error; err != nil {
+		return nil, fmt.Errorf("failed to create lab: %v", err)
+	}
+
+	// Update User Table with new playground
+
+	user := database.User{}
+	if err := s.db.Find(&user, userUUID).Error; err != nil {
+		return nil, fmt.Errorf("failed to find user: %v", err)
+	}
+	if labType == "playground" {
+		user.Playgrounds = append(user.Playgrounds, lab)
+	} else {
+		user.Projects = append(user.Projects, lab)
+	}
+
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to update user: %v", err)
+	}
+
+	return &lab, nil
+}
+
+func (s *service) GetUserProjects(userID uuid.UUID) ([]database.Lab, error) {
+
+	return nil, nil
+}
+
+func (s *service) SyncLabProgress(ctx context.Context, lab *database.Lab, labDetails utils.LabInstanceEntry) error {
+	return nil
+}
+
 func jsonHeaders() map[string]string {
 	return map[string]string{
 		"Content-Type":                 "application/json",
@@ -113,6 +265,7 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		return events.APIGatewayProxyResponse{StatusCode: 200, Headers: jsonHeaders(), Body: "{}"}, nil
 	}
 
+	aws.InitAWS()
 	// Init Redis utilities once per invocation
 	redis.InitRedis()
 	utils.InitRedisUtils(redis.RedisClient, redis.Context)
@@ -136,9 +289,22 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		return events.APIGatewayProxyResponse{StatusCode: 400, Headers: jsonHeaders(), Body: string(b)}, nil
 	}
 	if payload.LabID == "" {
-		payload.LabID = fmt.Sprintf("%d", time.Now().UnixNano())
+		payload.LabID = uuid.New().String()
 	}
-
+	if payload.UserId == "" {
+		res := StartQuestResponse{Success: false, Error: "Un Authorized, User Id not found or missing"}
+		b, _ := json.Marshal(res)
+		return events.APIGatewayProxyResponse{StatusCode: 403, Headers: jsonHeaders(), Body: string(b)}, nil
+	}
+	userId := payload.UserId
+	language := payload.Language
+	labId := payload.LabID
+	err := svc.ValidateUserAndLimits(userId)
+	if err != nil {
+		res := StartQuestResponse{Success: false, Error: err.Error()}
+		b, _ := json.Marshal(res)
+		return events.APIGatewayProxyResponse{StatusCode: 403, Headers: jsonHeaders(), Body: string(b)}, nil
+	}
 	// Check concurrent lab limits
 	utils.RedisUtilsInstance.CreateLabProgressQueueIfNotExists()
 	utils.RedisUtilsInstance.CreateLabMonitoringQueueIfNotExists()
@@ -164,6 +330,16 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		return events.APIGatewayProxyResponse{StatusCode: 404, Headers: jsonHeaders(), Body: string(b)}, nil
 	}
 
+	fmt.Printf("DEBUG TRYING GET THE LAB ID %s\n", labId)
+	lab, err, labExists := svc.GetLabById(labId)
+	if err != nil {
+		res := StartQuestResponse{Success: false, Error: fmt.Sprintf("Failed to get lab by ID: %v", err)}
+		b, _ := json.Marshal(res)
+		return events.APIGatewayProxyResponse{StatusCode: 500, Headers: jsonHeaders(), Body: string(b)}, nil
+	}
+
+	fmt.Printf("DEBUG LAB EXISTS %v\n", labExists)
+
 	// Initialize k8s in-cluster
 	if err := k8s.InitK8sInCluster(); err != nil {
 		log.Printf("start-quest-handler: failed to init k8s: %v", err)
@@ -172,31 +348,74 @@ func handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 		return events.APIGatewayProxyResponse{StatusCode: 500, Headers: jsonHeaders(), Body: string(b)}, nil
 	}
 
+	sourceKey := quest.BoilerPlateCode
+	destinationKey := fmt.Sprintf("code/%s/projects/%s/%s/%s", userId, language, quest.Slug, labId)
+
+	codeLink := destinationKey
+
+	if labExists {
+		codeLink = lab.CodeLink
+	} else {
+		fmt.Printf("DEBUG: LAB NOT FOUND< CREATING LAB AND ADDING IT TO USER WITH ID %s and codeLink %s\n", userId, codeLink)
+		lab, err = svc.CreateLabForUser(userId, labId, language, codeLink, quest.ID, "project")
+		if err != nil {
+			res := StartQuestResponse{Success: false, Error: fmt.Sprintf("Failed to create lab for user: %v", err)}
+			b, _ := json.Marshal(res)
+			return events.APIGatewayProxyResponse{StatusCode: 500, Headers: jsonHeaders(), Body: string(b)}, nil
+		}
+	}
+	log.Printf("Copying content from %s to %s", sourceKey, destinationKey)
+	if !labExists {
+		err = utils.CopyS3Folder(sourceKey, destinationKey)
+		if err != nil {
+			res := StartQuestResponse{Success: false, Error: fmt.Sprintf("Failed to copy content to S3: %v", err)}
+			b, _ := json.Marshal(res)
+			return events.APIGatewayProxyResponse{StatusCode: 500, Headers: jsonHeaders(), Body: string(b)}, nil
+		}
+	}
+
 	// Prepare quest params; tests live under devsarena/projects/{slug}/tests/
 	questParams := k8s.SpinUpQuestParams{
 		LabID:                 payload.LabID,
 		Language:              payload.Language,
 		ProjectSlug:           payload.ProjectSlug,
 		S3Bucket:              os.Getenv("AWS_S3_BUCKET_NAME"),
-		BoilerplateKey:        quest.BoilerPlateCode,
+		BoilerplateKey:        codeLink,
+		CodeLink:              codeLink,
 		TestFilesKey:          "",
 		Namespace:             os.Getenv("K8S_NAMESPACE"),
 		ShouldCreateNamespace: false,
 	}
+	testResults :=
+		[]utils.TestResult{}
+	if labExists {
+		err := json.Unmarshal(lab.TestResults, &testResults)
+		if err != nil {
+			log.Printf("Failed to unmarshal test results: %v", err)
+			testResults = []utils.TestResult{}
+		}
+	}
+	activeCheckpoint := 1
+	if labExists {
+		activeCheckpoint = lab.ActiveCheckpoint
+	}
 
 	// Create lab instance in Redis
 	labInstance := utils.LabInstanceEntry{
-		Language:       payload.Language,
-		LabID:          payload.LabID,
-		CreatedAt:      time.Now().Unix(),
-		Status:         utils.Created,
-		LastUpdatedAt:  time.Now().Unix(),
-		ProgressLogs:   []utils.LabProgressEntry{},
-		DirtyReadPaths: []string{},
+		Language:         language,
+		LabID:            labId,
+		CodeLink:         codeLink,
+		CreatedAt:        time.Now().Unix(),
+		Status:           utils.Created,
+		ActiveCheckpoint: activeCheckpoint,
+		LastUpdatedAt:    time.Now().Unix(),
+		ProgressLogs:     []utils.LabProgressEntry{},
+		DirtyReadPaths:   []utils.DirtyFileEntry{},
+		TestResults:      testResults,
 	}
 	utils.RedisUtilsInstance.CreateLabInstance(labInstance)
 
-	log.Printf("start-quest-handler: starting quest pod labId=%s projectSlug=%s language=%s", payload.LabID, payload.ProjectSlug, payload.Language)
+	log.Printf("start-quest-handler: starting quest pod labId=%s projectSlug=%s language=%s", labId, payload.ProjectSlug, language)
 	if err := k8s.SpinUpQuestPod(questParams); err != nil {
 		log.Printf("start-quest-handler: failed to spin up quest pod: %v", err)
 		res := StartQuestResponse{Success: false, Error: fmt.Sprintf("Failed to spin up quest pod: %v", err)}

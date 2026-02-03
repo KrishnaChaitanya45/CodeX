@@ -15,6 +15,7 @@ import Squares from "@/components/landing/Squares";
 import { Language } from "@/app/projects/page";
 import { QuestMeta } from "@/app/projects/[language]/page";
 import { generateRandomLabId } from "@/utils/labIdGenerator";
+import { MobileSupportModal } from "@/components/common/MobileSupportModal";
 
 interface StartQuestModalProps {
   isOpen: boolean;
@@ -216,6 +217,17 @@ export function ProjectContainer({projects, language}: {projects: QuestMeta[], l
   const [showStartModal, setShowStartModal] = useState(false);
   const [isStartingQuest, setIsStartingQuest] = useState(false);
   const [complexityFilter, setComplexityFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
 
   const normalizeDifficulty = (level?: string) => {
     const normalized = (level || "").toLowerCase();
@@ -232,6 +244,10 @@ export function ProjectContainer({projects, language}: {projects: QuestMeta[], l
 
   const handleStartQuest = async (labId: string) => {
     if (!selectedQuest) return;
+    if (isMobile) {
+      setShowMobileModal(true);
+      return;
+    }
 
     if(language == "vanilla-js"){
       setTimeout(()=>{
@@ -276,6 +292,10 @@ export function ProjectContainer({projects, language}: {projects: QuestMeta[], l
   };
 
   const openStartModal = (quest: QuestMeta) => {
+    if (isMobile) {
+      setShowMobileModal(true);
+      return;
+    }
     setSelectedQuest(quest);
     setShowStartModal(true);
   };
@@ -509,6 +529,10 @@ export function ProjectContainer({projects, language}: {projects: QuestMeta[], l
         language={language}
         onStartQuest={handleStartQuest}
         isStarting={isStartingQuest}
+      />
+      <MobileSupportModal
+        isOpen={showMobileModal}
+        onClose={() => setShowMobileModal(false)}
       />
     </>
   )
