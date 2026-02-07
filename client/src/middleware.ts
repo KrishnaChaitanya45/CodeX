@@ -16,18 +16,23 @@ export default auth((req) => {
   const hostname = req.headers.get('host');
 
   //? Blogs check and redirect
-  if (hostname === 'blogs.devsarena.in') {
+if (hostname === 'blogs.devsarena.in') {
     if (url.pathname === '/') {
       url.pathname = '/blogs';
       return NextResponse.rewrite(url);
     }
-
     if (!url.pathname.startsWith('/blogs')) {
       url.pathname = `/blogs${url.pathname}`;
       return NextResponse.rewrite(url);
     }
   }
 
+  if (hostname === 'devsarena.in' && url.pathname.startsWith('/blogs')) {
+    const newPath = url.pathname.replace(/^\/blogs/, '') || '/';
+    return NextResponse.redirect(new URL(newPath, 'https://blogs.devsarena.in'));
+  }
+
+  
   const isProtectedRoute = protectedRoutes.some((route) => {
     if (route.endsWith("/*")) {
       const baseRoute = route.slice(0, -2)
