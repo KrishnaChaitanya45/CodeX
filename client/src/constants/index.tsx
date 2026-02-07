@@ -1,0 +1,1 @@
+export const R2_URL = "https://static.devsarena.in/assets/";

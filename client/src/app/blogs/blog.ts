@@ -47,16 +47,16 @@ export type BlogPost = {
 export const blogPosts: BlogPost[] = [
   {
     slug: "devsarena-journey",
-    title: "DevsArena: Building a learning arena from scratch",
+    title: "DevsArena: How I Cooked This Up From Scratch",
     description:
-      "A candid, long-form look at how the idea started, what broke, and what kept me building.",
-    date: "Feb 5, 2026",
+      "Read the behind-the-scenes story of building DevsArena. A deep dive into system design, Kubernetes, and the engineering challenges of creating a cloud learning platform.",
+    date: "Feb 7, 2026",
     readTime: "12 min read",
-    hero: "A builder's log from curiosity to platform.",
-    tags: ["Curiosity", "Engineering", "Journey"],
+    hero: "Trust the process (and the git commit history).",
+    tags: ["Curiosity", "Engineering", "Journey", "LetHimCook"],
     author: {
       name: "Krishna",
-      title: "Fellow Curiosity Developer",
+      title: "Fellow Curious Developer",
       avatar: "https://avatars.githubusercontent.com/u/96629150?v=4",
       socials: [
         { label: "Twitter", href: "https://x.com/KrishnaWyvern" },
@@ -257,7 +257,7 @@ export const blogPosts: BlogPost[] = [
           },
           {
             type: "image",
-            src: "/blog/v0-high-level-steps.png",
+            src: "https://static.devsarena.in/assets/blog/v0-high-level-steps.png",
             alt: "Steps in higher level - Flowchart showing how a user selects a problem and works through checkpoints",
             caption: "The initial flowchart we brainstormed: Breaking problems into checkpoints and hidden tests."
           },
@@ -279,7 +279,7 @@ export const blogPosts: BlogPost[] = [
           },
           {
              type: "image",
-             src: "/blog/v0-architecture-flow.png",
+             src: "https://static.devsarena.in/assets/blog/v0-architecture-flow.png",
              alt: "Architecture Diagram - B2B client to NextJS app to Lambda",
              caption: "The ambitious architecture: Proxied requests, Lambdas, and synchronous flows for a B2B V0."
           },

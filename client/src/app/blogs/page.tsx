@@ -5,12 +5,67 @@ import Footer from "@/components/landing/Footer";
 import Squares from "@/components/landing/Squares";
 import { Github, Twitter, Globe, Linkedin } from "lucide-react";
 import { blogPosts, BlogBlock, BlogSection, TextHighlight, BlogPost } from "./blog";
-import { siteContent } from "../content";
+import {  siteContent } from "@/app/content";
+import { R2_URL } from "@/constants";
 
 export const metadata: Metadata = {
-  title: "Blog",
-  description: "Product notes, engineering stories, and the DevsArena journey.",
-  alternates: { canonical: "/blogs" },
+
+  metadataBase: new URL("https://blogs.devsarena.in"),
+
+  title: {
+    default: "Blog",
+    template: "%s | DevsArena",
+  },
+  description:
+    "The engineering logs of DevsArena. Product notes, system design deep dives, and the chaotic reality of building a cloud-native platform.",
+
+  keywords: [
+    "DevsArena",
+    "Engineering Blog",
+    "System Design",
+    "Kubernetes",
+    "Developers",
+  ],
+  authors: [{ name: "Krishna", url: "https://x.com/KrishnaWyvern" }],
+  creator: "Krishna",
+
+  icons: {
+    icon: `${R2_URL}/icon.svg`, 
+    shortcut: `${R2_URL}/icon.svg`,
+    apple: `${R2_URL}/apple-icon.png`,
+  },
+
+  openGraph: {
+    title: "DevsArena Engineering Blog",
+    description:
+      "The engineering logs of DevsArena. Product notes, system design deep dives, and the chaotic reality of building a cloud-native platform.",
+    url: "https://blogs.devsarena.in",
+    siteName: "DevsArena Blog",
+    locale: "en_US",
+    type: "website",
+    images: [
+      {
+        url: `${R2_URL}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "DevsArena Blog Cover",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "DevsArena Engineering Blog",
+    description:
+      "The engineering logs of DevsArena. Product notes, system design deep dives, and the chaotic reality of building a cloud-native platform.",
+    creator: "@KrishnaWyvern",
+    images: [`${R2_URL}/og-image.png`], 
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 const slugify = (value: string) =>
