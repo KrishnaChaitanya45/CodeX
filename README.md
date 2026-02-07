@@ -32,7 +32,9 @@ Here’s what you get out of the box:
 All of this runs inside isolated containers so you get a real-world development experience – right from your browser.
 
 ---
+<div align="center"> <h3>Curious to know how this was built? 🏗️</h3> <p>I'm documenting the entire engineering journey, architectural decisions, and technical deep-dives.</p> <a href="https://blogs.devsarena.in"> <img src="https://img.shields.io/badge/read_the_blog-blogs.devsarena.in-blue?style=for-the-badge&logo=hashnode" alt="Read the Blog" /> </a> </div>
 
+---
 # 🎮 All About Playgrounds
 
 Playgrounds are the fastest way to jump into DevsArena.
