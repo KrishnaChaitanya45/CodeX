@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
+
 
 const protectedRoutes = [
   "/projects",
@@ -9,30 +10,19 @@ const protectedRoutes = [
 
 ]
 
-export default auth((req) => {
+const authMiddleware = auth((req) => {
+  const { nextUrl } = req
   const isLoggedIn = !!req.auth
-  const { pathname } = req.nextUrl
-  const url = req.nextUrl;
-  const hostname = req.headers.get('host');
+  const hostname = req.headers.get("host") || ""
+  const { pathname } = nextUrl
 
-  //? Blogs check and redirect
-if (hostname === 'blogs.devsarena.in') {
-    if (url.pathname === '/') {
-      url.pathname = '/blogs';
-      return NextResponse.rewrite(url);
-    }
-    if (!url.pathname.startsWith('/blogs')) {
-      url.pathname = `/blogs${url.pathname}`;
-      return NextResponse.rewrite(url);
-    }
+  // Handle Main Domain Redirect (devsarena.in/blogs -> blogs.devsarena.in)
+  if (hostname === "devsarena.in" && pathname.startsWith("/blogs")) {
+    const newPath = pathname.replace(/^\/blogs/, "") || "/"
+    return NextResponse.redirect(new URL(newPath, "https://blogs.devsarena.in"))
   }
 
-  if (hostname === 'devsarena.in' && url.pathname.startsWith('/blogs')) {
-    const newPath = url.pathname.replace(/^\/blogs/, '') || '/';
-    return NextResponse.redirect(new URL(newPath, 'https://blogs.devsarena.in'));
-  }
-
-  
+  // Check Protected Routes
   const isProtectedRoute = protectedRoutes.some((route) => {
     if (route.endsWith("/*")) {
       const baseRoute = route.slice(0, -2)
@@ -40,29 +30,47 @@ if (hostname === 'blogs.devsarena.in') {
     }
     return pathname === route || pathname.startsWith(`${route}/`)
   })
-  console.log("DEBUG REQ AUTH AND IS LOGGED In ", req.auth, isLoggedIn)
+  
   if (isProtectedRoute && !isLoggedIn) {
-    const loginUrl = new URL("/login", req.nextUrl)
+    const loginUrl = new URL("/login", nextUrl)
     loginUrl.searchParams.set("callbackUrl", pathname)
     return NextResponse.redirect(loginUrl)
   }
 
+  // Prepare Request Headers (if logged in)
+  const requestHeaders = new Headers(req.headers)
   if (isLoggedIn && req.auth?.user?.id) {
-    const newHeaders = new Headers(req.headers)
-
-    newHeaders.set("x-user-id", req.auth.user.id)
-
-    // Return the response with the new modified headers
-    return NextResponse.next({
-      request: {
-        headers: newHeaders,
-      },
-    })
+    requestHeaders.set("x-user-id", req.auth.user.id)
   }
 
-  // Default return if no specific action needed
-  return NextResponse.next()
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
 })
+
+
+export default async function middleware(req: NextRequest) {
+  const { nextUrl } = req
+  const hostname = req.headers.get("host") || ""
+  const { pathname } = nextUrl
+
+  // 1. Handle Blog Subdomain Logic (Bypasses Auth)
+  if (hostname === "blogs.devsarena.in") {
+    if (pathname === "/") {
+      return NextResponse.rewrite(new URL("/blogs", req.url))
+    }
+    if (!pathname.startsWith("/blogs")) {
+      return NextResponse.rewrite(new URL(`/blogs${pathname}`, req.url))
+    }
+    return NextResponse.next()
+  }
+
+  //@ts-ignore
+  return authMiddleware(req)
+}
+
 
 export const config = {
   matcher: [
