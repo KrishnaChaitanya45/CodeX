@@ -15,7 +15,7 @@ export default function NotFound() {
       <p className="mt-2 text-lg text-gray-600">
         Oops! The page you’re looking for does not exist.
       </p>
-      <Link href="/" className="mt-4 text-blue-500 hover:underline">
+      <Link href="https://devsarena.in" className="mt-4 text-blue-500 hover:underline">
         Go back home
       </Link>
     </div>

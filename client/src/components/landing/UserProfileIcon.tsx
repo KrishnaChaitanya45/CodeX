@@ -68,7 +68,7 @@ export default function UserProfileIcon({ user }: { user: User }) {
           {/* Menu Items */}
           <div className="space-y-0.5">
             <Link 
-              href="/dashboard"
+              href="https://devsarena.in/dashboard"
               onClick={() => setIsModalOpen(false)}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
             >

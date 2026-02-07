@@ -19,16 +19,31 @@ export default function Footer({
         <footer className="border-t border-white/10 bg-black/40 backdrop-blur-sm">
             <div className="mx-auto max-w-6xl px-6 py-12">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    {/* Logo and Tagline */}
-                    <div className="space-y-3">
-                        <Image
-                            src="/logos/white.svg"
-                            alt="DevsArena"
-                            width={160}
-                            height={36}
-                            className="h-8 w-auto"
-                        />
-                        <p className="text-sm text-gray-400">{tagline}</p>
+                    {/* Logo, Tagline, and Links */}
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <Image
+                                src="/logos/white.svg"
+                                alt="DevsArena"
+                                width={160}
+                                height={36}
+                                className="h-8 w-auto"
+                            />
+                            <p className="text-sm text-gray-400">{tagline}</p>
+                        </div>
+
+                        {/* Links as flex row */}
+                        <nav className="flex flex-wrap gap-3">
+                            <Link href="https://devsarena.in/blogs" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white">
+                                📝 Blog
+                            </Link>
+                            <Link href="https://devsarena.in/projects" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white">
+                                🚀 Projects
+                            </Link>
+                            <Link href="https://devsarena.in/playground" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white">
+                                ⚡ Playgrounds
+                            </Link>
+                        </nav>
                     </div>
 
                     {/* Socials and Copyright */}

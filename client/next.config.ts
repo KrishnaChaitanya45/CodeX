@@ -33,6 +33,11 @@ const nextConfig: NextConfig = {
         destination: '/projects/:slug*',
         permanent: true,
       },
+      {
+        source: '/blogs/:path*',
+        destination: 'https://blogs.devsarena.in/:path*',
+        permanent: true,
+      },
     ];
   },
 

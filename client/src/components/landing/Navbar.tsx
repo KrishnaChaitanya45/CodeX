@@ -7,9 +7,8 @@ export default async function Navbar() {
   let currentUser = await getCurrentUser()
   return (
     <header className="fixed inset-x-0 top-4 z-30">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-black/35 to-transparent" />
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 bg-black/20 backdrop-blur-md rounded-full border border-white/10">
-      <Link href="/" className="relative flex items-center gap-3">
+      <Link href="https://devsarena.in" className="relative flex items-center gap-3">
         <Image
         src="/logos/white.svg"
         alt="DevsArena"

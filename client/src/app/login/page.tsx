@@ -59,7 +59,7 @@ export default function LoginPage() {
               </button>
             </form>
             
-            <a href="/" className="text-sm font-medium text-gray-500 hover:text-white transition-colors px-4 py-2">
+            <a href="https://devsarena.in/" className="text-sm font-medium text-gray-500 hover:text-white transition-colors px-4 py-2">
               Explore the platform →
             </a>
           </div>

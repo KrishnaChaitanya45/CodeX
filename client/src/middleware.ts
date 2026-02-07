@@ -12,6 +12,21 @@ const protectedRoutes = [
 export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
+  const url = req.nextUrl;
+  const hostname = req.headers.get('host');
+
+  //? Blogs check and redirect
+  if (hostname === 'blogs.devsarena.in') {
+    if (url.pathname === '/') {
+      url.pathname = '/blogs';
+      return NextResponse.rewrite(url);
+    }
+
+    if (!url.pathname.startsWith('/blogs')) {
+      url.pathname = `/blogs${url.pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
 
   const isProtectedRoute = protectedRoutes.some((route) => {
     if (route.endsWith("/*")) {
