@@ -91,6 +91,9 @@ Let’s walk step-by-step through what happens when a user clicks **“Start Pla
 
 Grab a coffee ☕ and may be something to eat 🍔 – this is the full journey!
 
+<img width="1609" height="890" alt="image" src="https://github.com/user-attachments/assets/0fd0b832-838b-46f1-96b1-d01c5160a25b" />
+Here's the full picture on how the playground instance gets started. 
+
 
 ## 👆 Step 1 – User Clicks Start
 
