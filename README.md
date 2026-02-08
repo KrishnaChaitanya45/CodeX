@@ -354,6 +354,29 @@ Pretty fast, right? 😎
 
 
 
-## 🎬 And That’s the Full Story!
+## 👾 And That’s the Full Story!
 
 That’s the complete lifecycle of a DevsArena playground – from click to code.
+
+<hr />
+ <h3>🎬 Demos & What's Next?</h3>
+<p>
+  I'll be covering <b>Guided Projects</b>, <b>K8s</b>, and <b>Lab Cleanup</b> very soon! 
+</p>
+<p>
+  In the meantime, check out the playgrounds and project demos below. They are short and to the point—just around 5 minutes (sadly, Loom wouldn't let me record more without paying 💸). 
+</p>
+<p>
+  Since I'm not sure how long the free tier I'm operating on will survive, I've recorded the platform in action so you can see it live regardless!
+</p>
+  <br />
+
+  <a href="https://www.loom.com/share/917a531a94274c96b5065b19570c3d05">
+    <img src="https://img.shields.io/badge/Watch_Playground_Demo-625DF5?style=for-the-badge&logo=loom&logoColor=white" alt="Watch Playground Demo" />
+  </a>
+
+  &nbsp; &nbsp;
+
+  <a href="https://www.loom.com/share/3eb55ffc77154c7dbc04c62f8f2d6d5c">
+    <img src="https://img.shields.io/badge/Watch_Projects_Demo-625DF5?style=for-the-badge&logo=loom&logoColor=white" alt="Watch Projects Demo" />
+  </a>
