@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="https://devsarena.in/logos/white.svg" alt="DevsArena-Logo" width="80" height="80" />
+  <img src="https://devsarena.sudokrishna.dev/logos/white.svg" alt="DevsArena-Logo" width="80" height="80" />
   <p><strong>Build Complex Software.
 One Checkpoint at a Time.</strong></p>
 </div>
 
-Welcome to <a href="https://devsarena.in">**DevsArena**</a> – your playground in the cloud for learning, experimenting, and building real projects without installing anything locally.
+Welcome to <a href="https://devsarena.sudokrishna.dev/">**DevsArena**</a> – your playground in the cloud for learning, experimenting, and building real projects without installing anything locally.
 Launch coding environments in seconds, write code directly in the browser, run servers and tests, and explore technologies just like a real dev setup 💻✨
 
 At its heart, DevsArena revolves around two core ideas:
@@ -101,7 +101,7 @@ Here's the full picture on how the playground instance gets started.
 
 User opens:
 
-<a href="https://devsarena.in/playground">`/playground`</a> and clicks **Start Playground** (for example, React playground).
+<a href="https://devsarena.sudokrishna.dev/playground">`/playground`</a> and clicks **Start Playground** (for example, React playground).
 
 The frontend sends:
 
